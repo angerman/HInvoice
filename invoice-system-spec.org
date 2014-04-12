@@ -1,0 +1,68 @@
+* Scope
+  The invoice system should solve the following:  We will continously have to write invoices. To apple
+  or to someone else.  We want to simply put in the items we worked on, and get back a document ready
+  for printing but with the option do hand adjust some content.  An invoice consists of an invoicee(?)
+  who is the recepient of the invoice.  A list of services that were performed.  Prices for each
+  service.  A VAT added to the services subtotal and a grand total of the performed work to be payed.
+
+  A poper invoice has to have a service range (from when to when was the service performed) as well as
+  a valid invoice id, which may have to adhere to some conditions.
+
+  In Germany it used to be the case that invoices had to be consecutively numbered:
+  - http://www.schreib-korrektur-service.de/schreibservice/gesetzliche-anforderungen-rechnungsnummer-beachten/
+  - http://www.billomat.com/de/magazin/anforderungen-an-rechnungsnummern/
+  Especially the following page has some nice details
+  - http://www.rechnungswesen-portal.de/Fachinfo/Grundlagen/Anforderungen-an-eine-Rechnung.html
+
+* Components
+  To me it looks like we have at least three components.
+
+** Customers
+   We somehow need to define and be able to manage customers.
+   A customer has:
+   - A name
+   - An address (Street, Zip, Maybe State, Country)
+   - A VAT Number
+   ~
+   - Maybe a phone numer
+   - Maybe a website, ...
+
+** Maybe products
+   I'm not yet sure if we really need products with prefixed prices etc.
+   Or if we can just live with simply putting in the product details by hand.
+   A product has:
+   - A name/description
+   - A unit price
+   - A unit type (per hour, per item, ...?)
+
+** Invoices
+   An invoice will have to be linked to a customer.  Preferably to a customer's id
+   at a given point in time.  Thus if the customer later on changes for what ever
+   reason, (new address, ...) one would for consistency reasons want to be able to
+   point to the proper customer. 
+
+   An Invoice has:
+   - A number
+   - A date
+   - A customer
+   - A service date range (from -- to)
+   - A List of product sets, where product sets consist of a product and a quanity.
+** Tape
+   Some kind of tape that keeps a discrete log of things that happened.
+
+* Plan
+- [-] Setup git project [1/2]
+  - [X] git init
+  - [ ] git repo on server
+- [ ] Build a tape viewer [0/2]
+  - [ ] List tape items
+  - [ ] Show details? (Do we need this?)
+- [ ] Build customer management [0/4]
+  - [ ] List customers
+  - [ ] Add customer
+  - [ ] Edit customer
+  - [ ] Delete customer
+- [ ] Build invoice management [0/3]
+  - [ ] List invoices
+  - [ ] Add invoice
+  - [ ] Edit invoice 
