@@ -14,6 +14,20 @@
   Especially the following page has some nice details
   - http://www.rechnungswesen-portal.de/Fachinfo/Grundlagen/Anforderungen-an-eine-Rechnung.html
 
+* Technical Requirements
+  - should use latex as invoice processing engine, so we can use g-brief
+  - should be terminal bases that that it can be use from everywhere
+
+* Goals
+  I want to learn haskell with this project.  It should be simple enough, yet show the strenghts and
+  weaknesses of haskell.
+
+* Libraries
+  - vty-ui (for terminal UI drawing - has an exceptionally awesome documentation)
+  - hastache (great modern looking templating engine)
+  - sqlite-simple seems to be a pretty good start
+  - Decimal package allows for proper moneary handling.
+
 * Components
   To me it looks like we have at least three components.
 
@@ -51,9 +65,9 @@
    Some kind of tape that keeps a discrete log of things that happened.
 
 * Plan
-- [-] Setup git project [1/2]
+- [X] Setup git project [2/2]
   - [X] git init
-  - [ ] git repo on server
+  - [X] git repo on server
 - [ ] Build a tape viewer [0/2]
   - [ ] List tape items
   - [ ] Show details? (Do we need this?)
