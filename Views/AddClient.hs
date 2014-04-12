@@ -14,7 +14,7 @@ import Graphics.Vty.Widgets.Dialog
 import qualified Data.Text as T
 import Control.Applicative ((<$>),(<*>))
 import Control.Monad (liftM)
-import Model (Client, mkClient, mkAddress)
+import Models.Client (Client, mkClient, mkAddress)
 
 data AddClientUI =
   AddClientUI { no :: Widget Edit

@@ -1,34 +1,19 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Model where
 
-import Control.Applicative
-import Database.SQLite.Simple (execute, query_, lastInsertRowId)
-import Database.SQLite.Simple.FromRow
+-- Decimal support for SQLite Simple
+import Data.Decimal
+import Database.SQLite.Simple.FromField
+import Data.Word
+import Data.Typeable (Typeable)
+import Database.SQLite.Simple.Ok
+import Database.SQLite3 as Base (SQLData(..))
+import Database.SQLite.Simple.Internal (Field(..))
+-- for decimal we need word8 reading
+-- takeInt is not exported by SQLite.Simple.FromField
+takeInt :: (Num a, Typeable a) => Field -> Ok a
+takeInt (Field (SQLInteger i) _) = Ok . fromIntegral $ i
+takeInt f                        = returnError ConversionFailed f "need an int"
+instance FromField Word8 where
+  fromField = takeInt
 
-data Address  = Address  { street :: String
-                         , zipcode :: String
-                         , city :: String
-                         , state :: Maybe String
-                         , country :: String }
-              deriving (Show)
-                        
-data Client = Client { clientPK :: Int
-                     , clientID :: Int
-                     , name :: String
-                     , address :: Address
-                     , vatNo :: Maybe String }
-              deriving (Show)
-                       
-instance FromRow Client where
-  fromRow = Client <$> field <*> field <*> field <*> (Address <$> field <*> field <*> field <*> field <*> field) <*> field
-
-mkAddress = Address
-mkClient = Client
-
-insertClient conn cust = do
-  execute conn "insert into clients (id,name,street,zip,city,state,country,vatNo) values (?,?,?,?,?,?,?,?)" (i,n,s,z,c,st,co,v)
-  id <- lastInsertRowId conn
-  return cust{ clientPK = fromIntegral id }
-  where (Client _ i n (Address s z c st co) v) = cust
-
-allClients conn = query_ conn "SELECT * from clients" :: IO [Client]

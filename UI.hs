@@ -6,7 +6,8 @@ import Graphics.Vty.Widgets.All
 import Database.SQLite.Simple (Connection)
 import qualified Data.Text as T
 
-import Model
+import Models.Client
+import Models.Invoice
 import Views.AddClient
 
 companyName = "lichtzwerge GmbH"
@@ -15,10 +16,14 @@ version = "v0.1"
 selAttr = black `on` yellow
 
 data ClientsUI =
-  ClientsUI { getList :: Widget (List Client FormattedText) }
+  ClientsUI { getClList :: Widget (List Client FormattedText) }
+
+data InvoicesUI =
+  InvoicesUI { getInvList :: Widget (List Invoice FormattedText) }
 
 data AppUI = AppUI { getConn :: Connection
                    , getClients :: ClientsUI
+                   , getInvoices :: InvoicesUI
                    , getUIs :: Collection }
 
 mkClientsUI = do
@@ -28,9 +33,9 @@ mkClientsUI = do
 mkAppUI conn = do
   clients <- mkClientsUI
   c <- newCollection
-  return $ AppUI conn clients c
+  return $ AppUI conn clients undefined c
 
-getClientsList = getList . getClients
+getClientsList = getClList . getClients
 
 clientListUI app = do
   header <- plainText "Clients" <++> hFill ' ' 1 <++> plainText companyName
