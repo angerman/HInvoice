@@ -13,7 +13,7 @@
   - http://www.billomat.com/de/magazin/anforderungen-an-rechnungsnummern/
   Especially the following page has some nice details
   - http://www.rechnungswesen-portal.de/Fachinfo/Grundlagen/Anforderungen-an-eine-Rechnung.html
-
+    
 * Technical Requirements
   - should use latex as invoice processing engine, so we can use g-brief
   - should be terminal bases that that it can be use from everywhere
@@ -31,9 +31,9 @@
 * Components
   To me it looks like we have at least three components.
 
-** Customers
-   We somehow need to define and be able to manage customers.
-   A customer has:
+** Clients
+   We somehow need to define and be able to manage clients.
+   A client has:
    - A name
    - An address (Street, Zip, Maybe State, Country)
    - A VAT Number
@@ -61,9 +61,12 @@
    - A customer
    - A service date range (from -- to)
    - A List of product sets, where product sets consist of a product and a quanity.
+   - A due date
+   - A possible discount and cashback
+
 ** Tape
    Some kind of tape that keeps a discrete log of things that happened.
-
+ 
 * Plan
 - [X] Setup git project [2/2]
   - [X] git init
@@ -71,12 +74,23 @@
 - [ ] Build a tape viewer [0/2]
   - [ ] List tape items
   - [ ] Show details? (Do we need this?)
-- [ ] Build customer management [0/4]
-  - [ ] List customers
-  - [ ] Add customer
-  - [ ] Edit customer
-  - [ ] Delete customer
+- [-] Build client management [2/4]
+  - [X] List client
+  - [X] Add client
+  - [ ] Edit client
+  - [ ] Delete client
 - [ ] Build invoice management [0/3]
   - [ ] List invoices
   - [ ] Add invoice
   - [ ] Edit invoice 
+- [-] Build product management [2/3]
+  - [X] List products
+  - [X] Add products
+  - [ ] Edit products
+* TODOs
+  Stuff that needs to be done, discovered on the way.
+** TODO Compose more.
+** TODO Is using a dialog the right approach? Or would it be better to show a separate window below the list?
+** TODO Invoice needs a state (Draft, Finalized, Sent, Payed)
+** TODO Product `price` is actually `rate`
+** TODO Unify entities data, so that client, product, and invoice are the same type.

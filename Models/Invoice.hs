@@ -25,6 +25,7 @@ data Invoice = Invoice { invoicePK :: Int
                        , cashback :: Decimal }
                deriving (Show)
 
+name inv = (show . date $ inv) ++ " " ++ (Models.Client.name . client $ inv) -- (total)
 
 instance FromRow Invoice where
   fromRow = mkInvoice' <$> field <*> field
@@ -48,4 +49,4 @@ insertInvoice conn inv = do
   id <- lastInsertRowId conn
   return inv{ invoicePK = fromIntegral id }
 
-allInvoices conn = query_ conn "SELECT i.pk, i.id, c.*, i.from, i.to, i.date, i.due, i.vatDecimalPlaces, i.vat, i.discountDecimalPlaces, i.discount, i.cashbackDecimalPlaces, i.cashback FROM invoices AS i join clients AS c ON (i.client=c.pk)" :: IO [Invoice]
+allInvoices conn = query_ conn "SELECT i.pk, i.id, c.*, i.`from`, i.`to`, i.date, i.due, i.vatDecimalPlaces, i.vat, i.discountDecimalPlaces, i.discount, i.cashbackDecimalPlaces, i.cashback FROM invoices AS i join clients AS c ON (i.client=c.pk)" :: IO [Invoice]

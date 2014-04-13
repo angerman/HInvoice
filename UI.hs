@@ -33,15 +33,15 @@ data AppUI = AppUI { getConn :: Connection
                    , getUIs :: Collection }
 
 mkClientsUI = do
-  lst <- newList selAttr
+  lst <- newList selAttr 1
   return $ ClientsUI lst
 
 mkProductsUI = do
-  lst <- newList selAttr
+  lst <- newList selAttr 1
   return $ ProductsUI lst
 
 mkInvoicesUI = do
-  lst <- newList selAttr
+  lst <- newList selAttr 1
   return $ InvoicesUI lst
 
 mkAppUI conn = do
@@ -114,6 +114,23 @@ showProductAddUI app completion = do
         onCancel _ = const completion
 --------------------------------------------------------------------------------
 -- | Invoices View
+getInvoiceList = getInvList . getInvoices
+invoiceListUI app = do
+  populateInvoices app
+  lstFooter <- plainText "add" --  delete"
+  ui <- (((return (getInvoiceList app)) >>= bordered) <--> (return lstFooter))
+  fg <- newFocusGroup
+  _ <- addToFocusGroup fg (getInvoiceList app)
+
+  header <- plainText "Invoices" <++> hFill ' ' 1 <++> plainText companyName
+  footer <- plainText "Clients | Products | Invoices" <++> hFill ' ' 1 <++> plainText version
+  dui <- (return header) <--> (return ui) <--> (return footer)
+
+  return $ (dui, fg)
+
+  where populateInvoices app = do
+          invoices <- allInvoices $ getConn app
+          mapM_ (\c -> addToList (getInvoiceList app) c =<< (plainText . T.pack $ Models.Invoice.name c)) invoices
 
 --------------------------------------------------------------------------------
 mainUI conn = do
@@ -122,9 +139,11 @@ mainUI conn = do
 
   (clui, clfg) <- clientListUI app
   (pdui, pdfg) <- productListUI app
+  (inui, infg) <- invoiceListUI app
 
   switchToClientList <- addToCollection (getUIs app) clui clfg
   switchToProductList <- addToCollection (getUIs app) pdui pdfg
+  switchToInvoiceList <- addToCollection (getUIs app) inui infg
 
 --  (caui, cafg) <- clientAddUI (const $ switchToClientList) (const $ switchToClientList)
 --  switchToClientAdd  <- addToCollection c caui cafg
@@ -132,15 +151,25 @@ mainUI conn = do
   -- client list can be quit from with q and esc.
   clfg `onKeyPressed` \_ k mods ->
     case (k, mods) of
-      (KASCII 'p', [MCtrl]) -> switchToProductList >> return True
+      (KASCII 'n', [MCtrl]) -> switchToProductList >> return True
+      (KASCII 'p', [MCtrl]) -> switchToInvoiceList >> return True      
       (KASCII 'a', _) -> showClientAddUI app switchToClientList >> return True
       (KASCII 'q', _) -> shutdownUi >> return True
       _ -> return False
 
   pdfg `onKeyPressed` \_ k mods ->
     case (k, mods) of
-      (KASCII 'c', [MCtrl]) -> switchToClientList >> return True
+      (KASCII 'p', [MCtrl]) -> switchToClientList >> return True
+      (KASCII 'n', [MCtrl]) -> switchToInvoiceList >> return True      
       (KASCII 'a', _) -> showProductAddUI app switchToProductList >> return True
+      (KASCII 'q', _) -> shutdownUi >> return True
+      _ -> return False
+
+  infg `onKeyPressed` \_ k mods ->
+    case (k, mods) of
+      (KASCII 'p', [MCtrl]) -> switchToProductList >> return True
+      (KASCII 'n', [MCtrl]) -> switchToClientList >> return True
+--      (KASCII 'a', _) -> showProductAddUI app switchToProductList >> return True
       (KASCII 'q', _) -> shutdownUi >> return True
       _ -> return False
 
