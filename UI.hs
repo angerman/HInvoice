@@ -134,7 +134,7 @@ invoiceListUI app = do
           mapM_ (\c -> addToList (getInvoiceList app) c =<< (plainText . T.pack $ Models.Invoice.name c)) invoices
 
 showInvoiceAddUI app completion = do
-  (iaui, iafg) <- newInvoiceAddDialog onAccept onCancel
+  (iaui, iafg) <- newInvoiceAddDialog (allProducts $ getConn app) onAccept onCancel
   switchToAdd <- addToCollection (getUIs app) iaui iafg
   switchToAdd
   where onAccept ws = \_ -> do
