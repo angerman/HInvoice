@@ -11,6 +11,7 @@ import Models.Product
 import Models.Invoice
 import Views.AddClient
 import Views.AddProduct
+import Views.AddInvoice
 
 companyName = "HInvoice"
 version = "v0.1"
@@ -132,6 +133,14 @@ invoiceListUI app = do
           invoices <- allInvoices $ getConn app
           mapM_ (\c -> addToList (getInvoiceList app) c =<< (plainText . T.pack $ Models.Invoice.name c)) invoices
 
+showInvoiceAddUI app completion = do
+  (iaui, iafg) <- newInvoiceAddDialog onAccept onCancel
+  switchToAdd <- addToCollection (getUIs app) iaui iafg
+  switchToAdd
+  where onAccept ws = \_ -> do
+          -- TODO: add invoice
+          completion
+        onCancel _ = const completion
 --------------------------------------------------------------------------------
 mainUI conn = do
 
@@ -169,7 +178,7 @@ mainUI conn = do
     case (k, mods) of
       (KASCII 'p', [MCtrl]) -> switchToProductList >> return True
       (KASCII 'n', [MCtrl]) -> switchToClientList >> return True
---      (KASCII 'a', _) -> showProductAddUI app switchToProductList >> return True
+      (KASCII 'a', _) -> showInvoiceAddUI app switchToInvoiceList >> return True
       (KASCII 'q', _) -> shutdownUi >> return True
       _ -> return False
 
