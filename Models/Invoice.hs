@@ -19,7 +19,7 @@ data Invoice = Invoice { invoicePK :: Int
                        , period :: Period
                        , date :: Day
                        , due :: Day
-                       , products :: [(Product, Int)]
+                       , products :: [(Int, Product)]
                        , vat :: Decimal
                        , discount :: Decimal
                        , cashback :: Decimal }

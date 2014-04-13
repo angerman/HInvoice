@@ -94,3 +94,10 @@
 ** TODO Invoice needs a state (Draft, Finalized, Sent, Payed)
 ** TODO Product `price` is actually `rate`
 ** TODO Unify entities data, so that client, product, and invoice are the same type.
+** TODO Invoice: discount, cashback and period(?) should be optional: Maybe.
+** TODO Make `enter` work as OK/Save, `esc` as Cancel/Discard.
+** TODO Use the ClientsListView for the client selection, with `selectAction`. Then we can even add a new client from that view.
+** TODO Add Right-Aligned Edit (number) Widget.
+** TODO Add Right-Aligned Decimal Edit Widgets.
+** TODO Add Date Widgets XXXX-XX-XX
+** TODO Add the option to add some additional custom text to the invoice. [low prio]
