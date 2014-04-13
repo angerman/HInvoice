@@ -144,11 +144,16 @@ newInvoiceAddDialog prods onAccept onCancel = do
         mapM_ (\p -> addToList lst p =<< (plainText . T.pack $ Models.Product.name p)) p
 
         ((boxFixed 5 1 e) <++> (vFixed 1 lst) <++> hFill ' ' 1 <++> (return t))  >>= addToList l "unused"
-      remProduct = return ()
+      remProduct l = do
+        r <- getSelected l
+        case r of
+          Nothing -> return ()
+          Just (i, _) -> removeFromList l i >> return ()
+
   (products st) `onKeyPressed` \l k _ -> do
     case k of
       (KASCII '+') -> addProduct l >> return True
-      (KASCII '-') -> remProduct >> return True
+      (KASCII '-') -> remProduct l >> return True
       _ -> return False
 
   dlg `onDialogAccept` onAccept st
