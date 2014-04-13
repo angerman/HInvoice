@@ -2,24 +2,14 @@
 module Views.AddInvoice (--toInvoice,
   newInvoiceAddDialog) where
 import Graphics.Vty
-import Graphics.Vty.Widgets.All (Widget, Edit,Box,HFixed,VFixed,
-                                 editWidget,getEditText,
-                                 plainText,
-                                 centered,
-                                 (<-->),(<++>),on,List,newList,FormattedText,
-                                 hFill,hLimit,
-                                 vFixed,
-                                 vBorder,
-                                 boxFixed,
-                                 onKeyPressed,
-                                 addToList,
-                                 withPadding,padLeft,padRight,padTop,padBottom,
-                                 newFocusGroup,addToFocusGroup,mergeFocusGroups)
+import Graphics.Vty.Widgets.All
 import Graphics.Vty.Widgets.Dialog
 import qualified Data.Text as T
 import Control.Applicative ((<$>),(<*>))
 import Control.Monad (liftM)
 import Models.Product (Product(..))
+import Text.Read (readMaybe)
+import Data.Decimal
 {-| sketch
 
 .-------- New Invoice -------------------------------------------------------------------.
@@ -61,8 +51,10 @@ data AddInvoiceUI =
                , due :: Widget Edit
                , from :: Widget Edit
                , to :: Widget Edit
-               , products :: Widget (List String (Box (VFixed (HFixed Edit))
-                                                  (VFixed (List Product FormattedText))))
+               , products :: Widget (List String (Box (Box (Box (VFixed (HFixed Edit))
+                                                       (VFixed (List Product FormattedText)))
+                                                       HFill)
+                                                  FormattedText))
                , vat :: Widget Edit
                , discount :: Widget Edit
                , cashback :: Widget Edit }
@@ -107,6 +99,10 @@ invoiceAddUI st = do
   return (paddedUI, fg)
   where AddInvoiceUI client' date' due' from' to' products' vat' discount' cashback'= st
 
+-- | returns the decimal representation of the text or the first argument (default)
+toDecimal :: Decimal -> T.Text -> Decimal
+toDecimal d = maybe d id . readMaybe . T.unpack
+
 newInvoiceAddDialog prods onAccept onCancel = do
   header <- plainText "Add Invoice" <++> hFill ' ' 1 <++> plainText "HInvoice"
   footer <- plainText "Clients | Products | Invoices" <++> hFill ' ' 1 <++> plainText "v0.1"
@@ -119,11 +115,35 @@ newInvoiceAddDialog prods onAccept onCancel = do
   mui <- (return header) <--> (centered =<< hLimit 75 =<< (return (dialogWidget dlg))) <--> (return footer)
 
   let addProduct l = do
+        e <- editWidget
+        setEditText e $ T.pack "1"
         lst <- newList selAttr 1
-        p <- prods
+        t <- plainText ""
+        p <- prods -- products
+        -- add products to lst
+        let formatProductPrice q p = (show $ q * (price p)) ++ " " ++ (currency p)
+            updatePriceFormatted q p = setText t . T.pack $ formatProductPrice q p
+            updatePrice = do
+              q <- getEditText e
+              r <- getSelected lst -- the result (idx, (a, b))
+              case r of
+                Just (_, (p, _)) -> updatePriceFormatted (toDecimal 1 q) p
+                Nothing -> setText t . T.pack $ ""
+        -- on selection or quantity change, update the price.
+        lst `onSelectionChange` \_ -> updatePrice
+        e `onChange` \_ -> updatePrice
+
+        -- on C-p, C-n, cycle the products
+        e `onKeyPressed` \_ k m ->
+          case (k, m) of
+            (KASCII 'p', [MCtrl]) -> scrollUp lst >> return True
+            (KASCII 'n', [MCtrl]) -> scrollDown lst >> return True
+            _ -> return False
+
+        -- populate the product list, this should trigger the update event as well.
         mapM_ (\p -> addToList lst p =<< (plainText . T.pack $ Models.Product.name p)) p
-        ui <- ((editWidget >>= boxFixed 5 1) <++> (vFixed 1 lst)) >>= addToList l "unused"
-        return ui
+
+        ((boxFixed 5 1 e) <++> (vFixed 1 lst) <++> hFill ' ' 1 <++> (return t))  >>= addToList l "unused"
       remProduct = return ()
   (products st) `onKeyPressed` \l k _ -> do
     case k of
