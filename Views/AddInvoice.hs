@@ -51,13 +51,20 @@ data AddInvoiceUI =
                , due :: Widget Edit
                , from :: Widget Edit
                , to :: Widget Edit
-               , products :: Widget (List String (Box (Box (Box (VFixed (HFixed Edit))
-                                                       (VFixed (List Product FormattedText)))
-                                                       HFill)
-                                                  FormattedText))
+               , products :: Widget (List ((Widget Edit, Widget (List Product FormattedText)))
+                                     (Box (Box (Box (VFixed (HFixed Edit))
+                                                (VFixed (List Product FormattedText)))
+                                           HFill)
+                                      FormattedText))
                , vat :: Widget Edit
                , discount :: Widget Edit
-               , cashback :: Widget Edit }
+               , cashback :: Widget Edit
+               -- display fields
+               , subtotal :: Widget FormattedText
+               , totalVAT :: Widget FormattedText
+               , totalDiscount :: Widget FormattedText
+               , totalCashback :: Widget FormattedText
+               , total :: Widget FormattedText }
   
 mkAddInvoiceUI = do
   client    <- editWidget
@@ -69,7 +76,13 @@ mkAddInvoiceUI = do
   vat       <- editWidget
   discount  <- editWidget
   cashback  <- editWidget
+  subtotal  <- plainText ""
+  totalVAT  <- plainText ""
+  totalDiscount <- plainText ""
+  totalCashback <- plainText ""
+  total     <- plainText ""
   return $ AddInvoiceUI client date due from to products vat discount cashback
+    subtotal totalVAT totalDiscount totalCashback total
 
 invoiceAddUI st = do
   fg <- newFocusGroup
@@ -84,24 +97,65 @@ invoiceAddUI st = do
         (plainText "Period") <-->
         (((plainText "From:") <++> (boxFixed 11 1 from') <++>
          (plainText " to:")  <++> (boxFixed 11 1 to')) >>= withPadding (padBottom 1))  <-->
-        ((plainText "Quantity ") <++> (plainText "Product") <++> (hFill ' '1) <++> (plainText "Total")) <-->
-        (vFixed 8 prodList) <-->
-        ((plainText "Use + / - to add / remove a product") <++> (hFill ' ' 1) <++> (plainText "SubTotal: XXXXXXX"))
+        (((plainText " Qty") >>= boxFixed 6 1) <++> (plainText "Product") <++> (hFill ' '1) <++> (plainText "Total ")) <-->
+        (vFixed 8 prodList)
         <-->
-        ((hFill ' ' 1) <++> (plainText "vat:") <++> (boxFixed 8 1 vat') <++> (plainText "% XXXXXXX")) <-->
-        ((hFill ' ' 1) <++> (plainText "discount:") <++> (boxFixed 8 1 discount') <++> (plainText "% XXXXXXX")) <-->
-        ((hFill ' ' 1) <++> (plainText "cashback:") <++> (boxFixed 8 1 cashback') <++> (plainText "% XXXXXXX")) <-->
-        (((hFill ' ' 1) <++> (plainText "total: XXXXXXX")) >>= withPadding (padTop 1))
+        ((plainText "+/- to add / remove products") <++>
+         (hFill ' ' 1) <++>
+         (plainText "SubTotal:") <++>
+         (boxFixed 7 1 subtotal'))
+        <-->
+        ((hFill ' ' 1) <++>
+         (plainText "vat:") <++>
+         (boxFixed 8 1 vat') <++>
+         (plainText "%") <++>
+         (boxFixed 7 1 totalVAT'))
+        <-->
+        ((hFill ' ' 1) <++>
+         (plainText "discount:") <++>
+         (boxFixed 8 1 discount') <++>
+         (plainText "%") <++>
+         (boxFixed 7 1 totalDiscount'))
+        <-->
+        ((hFill ' ' 1) <++>
+         (plainText "cashback:") <++>
+         (boxFixed 8 1 cashback') <++>
+         (plainText "%") <++>
+         (boxFixed 7 1 totalCashback'))
+        <-->
+        (((hFill ' ' 1) <++> (plainText "total: ") <++> (boxFixed 7 1 total'))
+         >>= withPadding (padTop 1))
 
   -- padd the invoice ui with left +2 and right +2 char.
   paddedUI <- (return ui) >>= withPadding (padLeft 2) >>= withPadding (padRight 2)
   
   return (paddedUI, fg)
-  where AddInvoiceUI client' date' due' from' to' products' vat' discount' cashback'= st
+  where AddInvoiceUI client' date' due' from' to' products' vat' discount' cashback'
+          subtotal' totalVAT' totalDiscount' totalCashback' total' = st
 
 -- | returns the decimal representation of the text or the first argument (default)
 toDecimal :: Decimal -> T.Text -> Decimal
 toDecimal d = maybe d id . readMaybe . T.unpack
+
+computeProductTotal :: Widget Edit -> Widget (List Product b) -> IO (Decimal, String)
+computeProductTotal edit productList = do
+  q <- getEditText edit
+  r <- getSelected productList
+  case r of
+    Just (_, (p, _)) -> return ((toDecimal 1 q) * (price p), (currency p))
+    Nothing -> return (0, "---")
+
+computeSubTotal :: (Decimal, String)
+                   -> Widget (List (Widget Edit, Widget (List Product b)) c)
+                   -> Int -> IO (Decimal, String)
+computeSubTotal acc l i = do
+  e <- getListItem l i
+  case e of
+    Nothing -> return acc
+    Just ((we,pl),_) -> do
+      (x,cur) <- computeProductTotal we pl
+      computeSubTotal (s+x,cur) l $ i+1
+  where (s,_) = acc
 
 newInvoiceAddDialog prods onAccept onCancel = do
   header <- plainText "Add Invoice" <++> hFill ' ' 1 <++> plainText "HInvoice"
@@ -114,7 +168,11 @@ newInvoiceAddDialog prods onAccept onCancel = do
   mfg <- mergeFocusGroups fg dfg
   mui <- (return header) <--> (centered =<< hLimit 75 =<< (return (dialogWidget dlg))) <--> (return footer)
 
-  let addProduct l = do
+  let updateSubtotal = do
+        (st_, cur) <- computeSubTotal (0,"---") (products st) 0
+        setText (subtotal st) $ T.pack ((show st_) ++ " " ++ cur)
+        
+      addProduct l = do
         e <- editWidget
         setEditText e $ T.pack "1"
         lst <- newList selAttr 1
@@ -124,14 +182,16 @@ newInvoiceAddDialog prods onAccept onCancel = do
         let formatProductPrice q p = (show $ q * (price p)) ++ " " ++ (currency p)
             updatePriceFormatted q p = setText t . T.pack $ formatProductPrice q p
             updatePrice = do
+              -- XXX: replace with computeProductTotal
               q <- getEditText e
               r <- getSelected lst -- the result (idx, (a, b))
               case r of
                 Just (_, (p, _)) -> updatePriceFormatted (toDecimal 1 q) p
                 Nothing -> setText t . T.pack $ ""
+              
         -- on selection or quantity change, update the price.
-        lst `onSelectionChange` \_ -> updatePrice
-        e `onChange` \_ -> updatePrice
+        lst `onSelectionChange` \_ -> updatePrice >> updateSubtotal
+        e `onChange` \_ -> updatePrice >> updateSubtotal
 
         -- on C-p, C-n, cycle the products
         e `onKeyPressed` \_ k m ->
@@ -143,7 +203,10 @@ newInvoiceAddDialog prods onAccept onCancel = do
         -- populate the product list, this should trigger the update event as well.
         mapM_ (\p -> addToList lst p =<< (plainText . T.pack $ Models.Product.name p)) p
 
-        ((boxFixed 5 1 e) <++> (vFixed 1 lst) <++> hFill ' ' 1 <++> (return t))  >>= addToList l "unused"
+        -- XXX why the subtotalupdate needs a different call is not yet clear to me...
+        -- XXX ???
+  
+        ((boxFixed 5 1 e) <++> (vFixed 1 lst) <++> hFill ' ' 1 <++> (return t))  >>= addToList l (e,lst)
       remProduct l = do
         r <- getSelected l
         case r of
