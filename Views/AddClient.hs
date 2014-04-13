@@ -67,8 +67,8 @@ clientAddUI st = do
   where AddClientUI no' name' street' zipcode' city' state' country' vat' = st
 
 newClientAddDialog onAccept onCancel = do
-  header <- plainText "Add Client" <++> hFill ' ' 1 <++> plainText "lichtzwerge GmbH"
-  footer <- plainText "Clients | Invoices" <++> hFill ' ' 1 <++> plainText "v0.1"
+  header <- plainText "Add Client" <++> hFill ' ' 1 <++> plainText "HInvoice"
+  footer <- plainText "Clients | Products | Invoices" <++> hFill ' ' 1 <++> plainText "v0.1"
 
   st <- mkAddClientUI
   (ui, fg) <- clientAddUI st

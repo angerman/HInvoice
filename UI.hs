@@ -7,10 +7,12 @@ import Database.SQLite.Simple (Connection)
 import qualified Data.Text as T
 
 import Models.Client
+import Models.Product
 import Models.Invoice
 import Views.AddClient
+import Views.AddProduct
 
-companyName = "lichtzwerge GmbH"
+companyName = "HInvoice"
 version = "v0.1"
 
 selAttr = black `on` yellow
@@ -18,11 +20,15 @@ selAttr = black `on` yellow
 data ClientsUI =
   ClientsUI { getClList :: Widget (List Client FormattedText) }
 
+data ProductsUI =
+  ProductsUI { getProdList :: Widget (List Product FormattedText) }
+
 data InvoicesUI =
   InvoicesUI { getInvList :: Widget (List Invoice FormattedText) }
 
 data AppUI = AppUI { getConn :: Connection
                    , getClients :: ClientsUI
+                   , getProducts :: ProductsUI
                    , getInvoices :: InvoicesUI
                    , getUIs :: Collection }
 
@@ -30,32 +36,41 @@ mkClientsUI = do
   lst <- newList selAttr
   return $ ClientsUI lst
 
+mkProductsUI = do
+  lst <- newList selAttr
+  return $ ProductsUI lst
+
+mkInvoicesUI = do
+  lst <- newList selAttr
+  return $ InvoicesUI lst
+
 mkAppUI conn = do
   clients <- mkClientsUI
+  products <- mkProductsUI
+  invoices <- mkInvoicesUI
   c <- newCollection
-  return $ AppUI conn clients undefined c
+  return $ AppUI conn clients products invoices c
 
+--------------------------------------------------------------------------------
+-- | Clients View
 getClientsList = getClList . getClients
 
 clientListUI app = do
-  header <- plainText "Clients" <++> hFill ' ' 1 <++> plainText companyName
-  footer <- plainText "Clients | Invoices" <++> hFill ' ' 1 <++> plainText version
-
   populateClients app
-  
-  lstFooter <- plainText "add  delete"
-
-  lstUi <- (((return (getClientsList $ app)) >>= bordered) <--> (return lstFooter))
-
-  ui <- (return header) <--> (return lstUi) <--> (return footer)
-
+  lstFooter <- plainText "add" --  delete"
+  ui <- (((return (getClientsList app)) >>= bordered) <--> (return lstFooter))
   fg <- newFocusGroup
   _ <- addToFocusGroup fg (getClientsList app)
 
-  return (ui, fg)
+  header <- plainText "Clients" <++> hFill ' ' 1 <++> plainText companyName
+  footer <- plainText "Clients | Products | Invoices" <++> hFill ' ' 1 <++> plainText version
+  dui <- (return header) <--> (return ui) <--> (return footer)
+
+  return $ (dui, fg)
+  
   where populateClients app = do
           clients <- allClients $ getConn app
-          mapM_ (\c -> addToList (getClientsList app) c =<< (plainText . T.pack $ name c)) clients
+          mapM_ (\c -> addToList (getClientsList app) c =<< (plainText . T.pack $ Models.Client.name c)) clients
 
 showClientAddUI app completion = do
   (caui, cafg) <- newClientAddDialog onAccept onCancel
@@ -64,27 +79,69 @@ showClientAddUI app completion = do
   where onAccept ws = \_ -> do
           client <- toClient ws
           client2 <- insertClient (getConn app) client
-          addToList (getClientsList app) client2 =<< (plainText . T.pack $ name client2)
+          addToList (getClientsList app) client2 =<< (plainText . T.pack $ Models.Client.name client2)
           completion
         onCancel _ = const completion
+--------------------------------------------------------------------------------
+-- | Products View
+getProductsList = getProdList . getProducts
+productListUI app = do
+  populateProducts app
+  lstFooter <- plainText "add" --  delete"
+  ui <- (((return (getProductsList app)) >>= bordered) <--> (return lstFooter))
+  fg <- newFocusGroup
+  _ <- addToFocusGroup fg (getProductsList app)
 
+  header <- plainText "Products" <++> hFill ' ' 1 <++> plainText companyName
+  footer <- plainText "Clients | Products | Invoices" <++> hFill ' ' 1 <++> plainText version
+  dui <- (return header) <--> (return ui) <--> (return footer)
+
+  return $ (dui, fg)
+
+  where populateProducts app = do
+          products <- allProducts $ getConn app
+          mapM_ (\c -> addToList (getProductsList app) c =<< (plainText . T.pack $ Models.Product.name c)) products
+
+showProductAddUI app completion = do
+  (paui, pafg) <- newProductAddDialog onAccept onCancel
+  switchToAdd <- addToCollection (getUIs app) paui pafg
+  switchToAdd
+  where onAccept ws = \_ -> do
+          product <- toProduct ws
+          product2 <- insertProduct (getConn app) product
+          addToList (getProductsList app) product2 =<< (plainText . T.pack $ Models.Product.name product2)
+          completion
+        onCancel _ = const completion
+--------------------------------------------------------------------------------
+-- | Invoices View
+
+--------------------------------------------------------------------------------
 mainUI conn = do
 
   app <- mkAppUI conn
 
   (clui, clfg) <- clientListUI app
+  (pdui, pdfg) <- productListUI app
 
   switchToClientList <- addToCollection (getUIs app) clui clfg
+  switchToProductList <- addToCollection (getUIs app) pdui pdfg
 
 --  (caui, cafg) <- clientAddUI (const $ switchToClientList) (const $ switchToClientList)
 --  switchToClientAdd  <- addToCollection c caui cafg
 
   -- client list can be quit from with q and esc.
-  clfg `onKeyPressed` \_ k _ ->
-    case k of
-      (KASCII 'a') -> showClientAddUI app switchToClientList >> return True
-      (KASCII 'q') -> shutdownUi >> return True
-      KEsc -> shutdownUi >> return True
+  clfg `onKeyPressed` \_ k mods ->
+    case (k, mods) of
+      (KASCII 'p', [MCtrl]) -> switchToProductList >> return True
+      (KASCII 'a', _) -> showClientAddUI app switchToClientList >> return True
+      (KASCII 'q', _) -> shutdownUi >> return True
+      _ -> return False
+
+  pdfg `onKeyPressed` \_ k mods ->
+    case (k, mods) of
+      (KASCII 'c', [MCtrl]) -> switchToClientList >> return True
+      (KASCII 'a', _) -> showProductAddUI app switchToProductList >> return True
+      (KASCII 'q', _) -> shutdownUi >> return True
       _ -> return False
 
   runUi (getUIs app) defaultContext
