@@ -20,6 +20,9 @@ CREATE TABLE invoices (
        pk INTEGER PRIMARY KEY,
        id INTEGER,
        client INTEGER,
+       `from` TIMESTAMP, `to` TIMESTAMP,
+       `date` TIMESTAMP,
+       `due` TIMESTAMP,
        vatDecimalPlaces INTEGER, vat INTEGER,
        discountDecimalPlaces INTEGER, discount INTEGER, 
        cashbackDecimalPlaces INTEGER, cashback INTEGER
