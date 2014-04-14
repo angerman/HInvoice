@@ -7,9 +7,13 @@ import Graphics.Vty.Widgets.Dialog
 import qualified Data.Text as T
 import Control.Applicative ((<$>),(<*>))
 import Control.Monad (liftM)
-import Models.Product (Product(..))
 import Text.Read (readMaybe)
 import Data.Decimal
+
+import Models.Product (Product(..))
+import Models.Invoice (mkInvoice, Period(..))
+import Models.Client (getClient)
+
 {-| sketch
 
 .-------- New Invoice -------------------------------------------------------------------.
@@ -65,6 +69,42 @@ data AddInvoiceUI =
                , totalDiscount :: Widget FormattedText
                , totalCashback :: Widget FormattedText
                , total :: Widget FormattedText }
+
+getProductListItem we pl = do
+  qty'     <- liftM read . liftM T.unpack . getEditText $ we
+  r        <- getSelected pl
+  case r of
+    Just (_, (p, _)) -> return (qty', p)
+
+
+getProducts :: AddInvoiceUI -> IO [(Int, Product)]
+getProducts st = getProducts' [] (products st) 0
+  where getProducts' acc l i = do
+          e <- getListItem l i
+          case e of
+            Nothing -> return acc
+            Just ((we,pl),_) -> do
+              qp <- getProductListItem we pl
+              getProducts' (qp:acc) l $ i+1
+  
+
+toInvoice conn st = do
+  client'   <- liftM read . get $ client st
+  date'     <- liftM read . get $ date st
+  due'      <- liftM read . get $ due st
+  from'     <- liftM read . get $ from st
+  to'       <- liftM read . get $ to st
+  products' <- getProducts st
+  vat'      <- getVAT $ vat st
+  discount' <- getDiscount $ discount st
+  c <- getClient conn client'
+
+  case c of
+    Just c -> return $ mkInvoice 0 0 c (Period from' to') date' due' products' vat' discount' 0
+  
+  where get = liftM T.unpack . getEditText
+        getVAT = liftM ((/100) . toDecimal 0) . getEditText
+        getDiscount = liftM (negate . (/100) . toDecimal 0) . getEditText
 
 showCurrency :: Decimal -> String -> String
 showCurrency d c = (show $ roundTo 2 d) ++ " " ++ c
@@ -263,7 +303,7 @@ computeSubTotal acc l i = do
       computeSubTotal (s+x,cur) l $ i+1
   where (s,_) = acc
 
-newInvoiceAddDialog prods onAccept onCancel = do
+newInvoiceAddDialog conn prods onAccept onCancel = do
   header <- plainText "Add Invoice" <++> hFill ' ' 1 <++> plainText "HInvoice"
   footer <- plainText "Clients | Products | Invoices" <++> hFill ' ' 1 <++> plainText "v0.1"
 
@@ -274,7 +314,7 @@ newInvoiceAddDialog prods onAccept onCancel = do
   mfg <- mergeFocusGroups fg dfg
   mui <- (return header) <--> (centered =<< hLimit 75 =<< (return (dialogWidget dlg))) <--> (return footer)
 
-  dlg `onDialogAccept` onAccept st
+  dlg `onDialogAccept` onAccept (toInvoice conn st)
   dlg `onDialogCancel` onCancel st
 
   return (mui, mfg)

@@ -2,8 +2,9 @@
 module Models.Client where
 
 import Control.Applicative
-import Database.SQLite.Simple (execute, query_, lastInsertRowId)
+import Database.SQLite.Simple (Connection, execute, query, query_, lastInsertRowId)
 import Database.SQLite.Simple.FromRow
+import Data.Maybe (listToMaybe)
 
 data Address  = Address  { street :: String
                          , zipcode :: String
@@ -30,5 +31,9 @@ insertClient conn cust = do
   id <- lastInsertRowId conn
   return cust{ clientPK = fromIntegral id }
   where (Client _ i n (Address s z c st co) v) = cust
+
+getClient :: Connection -> Int -> IO (Maybe Client)
+getClient conn pk = listToMaybe <$> query conn "select * from clients  where pk=?" [pk]
+  
 
 allClients conn = query_ conn "SELECT * from clients" :: IO [Client]
