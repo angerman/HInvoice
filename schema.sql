@@ -25,10 +25,12 @@ CREATE TABLE invoices (
        `due` TIMESTAMP,
        vatDecimalPlaces INTEGER, vat INTEGER,
        discountDecimalPlaces INTEGER, discount INTEGER, 
-       cashbackDecimalPlaces INTEGER, cashback INTEGER
+       cashbackDecimalPlaces INTEGER, cashback INTEGER,
+       `state` INTEGER
 );
 CREATE TABLE invoices_products (
        invoice INTEGER,
        product INTEGER,
-       quantity INTEGER
+       quantity INTEGER,
+       comment text
 );
