@@ -27,7 +27,7 @@ import Data.Decimal
 |                                                                                        |
 |  Products                                                                              |
 |  | [______] [Product name (enter to chooe a different product)]   [sum prod x quant] | |
-|  |                                                                                   | |
+|  |          [Comment                                          ]                      | |
 |  |                                                                                   | |
 |  use + / - to add / remove a product                               Subtotal: XXXXXXX   |
 |                                                                                        |
@@ -69,7 +69,7 @@ data AddInvoiceUI =
 showCurrency :: Decimal -> String -> String
 showCurrency d c = (show $ roundTo 2 d) ++ " " ++ c
 
-mkAddInvoiceUI = do
+mkAddInvoiceUI prods = do
   client    <- editWidget
   date      <- editWidget
   due       <- editWidget
@@ -87,7 +87,8 @@ mkAddInvoiceUI = do
   -- helper
   let getVAT = (/100) . toDecimal 0 <$> getEditText vat
       getDiscount = negate . (/100) . toDecimal 0 <$> getEditText discount
-        
+      
+  
   -- add events
   let updateVAT = do
         (st_, cur) <- computeSubTotal (0,"---") products 0
@@ -105,9 +106,77 @@ mkAddInvoiceUI = do
         d <- getDiscount
         v <- getVAT
         setText total $ T.pack $ showCurrency (st_ * (1 + d) * (1 + v)) cur
-      
+
+      updateSubtotal = do
+        (st_, cur) <- computeSubTotal (0,"---") products 0
+        setText subtotal $ T.pack $ showCurrency st_ cur
+        
+      addProduct l = do
+        e <- editWidget
+        setEditText e $ T.pack "1"
+        lst <- newList selAttr 1
+        t <- plainText ""
+        p <- prods -- products
+        -- add products to lst
+        let formatProductPrice q p = showCurrency (q * (price p)) (currency p)
+            updatePriceFormatted q p = setText t . T.pack $ formatProductPrice q p
+            updatePrice = do
+              -- XXX: replace with computeProductTotal
+              q <- getEditText e
+              r <- getSelected lst -- the result (idx, (a, b))
+              case r of
+                Just (_, (p, _)) -> updatePriceFormatted (toDecimal 1 q) p
+                Nothing -> setText t . T.pack $ ""
+              
+        -- on selection or quantity change, update the price.
+        lst `onSelectionChange` \_ -> updatePrice
+                                      >> updateSubtotal
+                                      >> updateDiscount
+                                      >> updateVAT
+                                      >> updateTotal
+        e `onChange` \_ -> updatePrice
+                           >> updateSubtotal
+                           >> updateDiscount
+                           >> updateVAT
+                           >> updateTotal
+
+        -- on C-p, C-n, cycle the products
+        e `onKeyPressed` \_ k m ->
+          case (k, m) of
+            (KASCII 'p', [MCtrl]) -> scrollUp lst >> return True
+            (KASCII 'n', [MCtrl]) -> scrollDown lst >> return True
+            _ -> return False
+
+        -- populate the product list, this should trigger the update event as well.
+        mapM_ (\p -> addToList lst p =<< (plainText . T.pack $ Models.Product.name p)) p
+        -- add [ <qty> ] [List: products] [<total> <cur>] to the list
+        ((boxFixed 5 1 e) <++> (vFixed 1 lst) <++> hFill ' ' 1 <++> (return t))  >>= addToList l (e,lst)
+      remProduct l = do
+        r <- getSelected l
+        case r of
+          Nothing -> return ()
+          Just (i, _) -> removeFromList l i >> return ()
+
+  
   vat `onChange` \_ -> updateVAT >> updateTotal
   discount `onChange` \_ -> updateDiscount >> updateVAT >> updateTotal
+  
+  products `onKeyPressed` \l k _ -> do
+    case k of
+      (KASCII '+') -> addProduct l
+                      >> updateSubtotal
+                      >> updateDiscount
+                      >> updateVAT
+                      >> updateTotal                      
+                      >> return True
+      (KASCII '-') -> remProduct l
+                      >> updateSubtotal
+                      >> updateDiscount
+                      >> updateVAT
+                      >> updateTotal
+                      >> return True
+      _ -> return False
+
   
   -- set default values.
   setEditText vat $ T.pack "19"
@@ -172,6 +241,7 @@ invoiceAddUI st = do
 toDecimal :: Decimal -> T.Text -> Decimal
 toDecimal d = maybe d id . readMaybe . T.unpack
 
+-- | computes the qty times unit price for one product (widget / item of the list)
 computeProductTotal :: Widget Edit -> Widget (List Product b) -> IO (Decimal, String)
 computeProductTotal edit productList = do
   q <- getEditText edit
@@ -180,6 +250,7 @@ computeProductTotal edit productList = do
     Just (_, (p, _)) -> return ((toDecimal 1 q) * (price p), (currency p))
     Nothing -> return (0, "---")
 
+-- | Compute the sum of qty times unit price from the list of products.
 computeSubTotal :: (Decimal, String)
                    -> Widget (List (Widget Edit, Widget (List Product b)) c)
                    -> Int -> IO (Decimal, String)
@@ -196,60 +267,12 @@ newInvoiceAddDialog prods onAccept onCancel = do
   header <- plainText "Add Invoice" <++> hFill ' ' 1 <++> plainText "HInvoice"
   footer <- plainText "Clients | Products | Invoices" <++> hFill ' ' 1 <++> plainText "v0.1"
 
-  st <- mkAddInvoiceUI
+  st <- mkAddInvoiceUI prods
   (ui, fg) <- invoiceAddUI st
   (dlg, dfg) <- newDialog ui "New Invoice"
 
   mfg <- mergeFocusGroups fg dfg
   mui <- (return header) <--> (centered =<< hLimit 75 =<< (return (dialogWidget dlg))) <--> (return footer)
-
-  let updateSubtotal = do
-        (st_, cur) <- computeSubTotal (0,"---") (products st) 0
-        setText (subtotal st) $ T.pack $ showCurrency st_ cur
-        
-      addProduct l = do
-        e <- editWidget
-        setEditText e $ T.pack "1"
-        lst <- newList selAttr 1
-        t <- plainText ""
-        p <- prods -- products
-        -- add products to lst
-        let formatProductPrice q p = showCurrency (q * (price p)) (currency p)
-            updatePriceFormatted q p = setText t . T.pack $ formatProductPrice q p
-            updatePrice = do
-              -- XXX: replace with computeProductTotal
-              q <- getEditText e
-              r <- getSelected lst -- the result (idx, (a, b))
-              case r of
-                Just (_, (p, _)) -> updatePriceFormatted (toDecimal 1 q) p
-                Nothing -> setText t . T.pack $ ""
-              
-        -- on selection or quantity change, update the price.
-        lst `onSelectionChange` \_ -> updatePrice >> updateSubtotal
-        e `onChange` \_ -> updatePrice >> updateSubtotal
-
-        -- on C-p, C-n, cycle the products
-        e `onKeyPressed` \_ k m ->
-          case (k, m) of
-            (KASCII 'p', [MCtrl]) -> scrollUp lst >> return True
-            (KASCII 'n', [MCtrl]) -> scrollDown lst >> return True
-            _ -> return False
-
-        -- populate the product list, this should trigger the update event as well.
-        mapM_ (\p -> addToList lst p =<< (plainText . T.pack $ Models.Product.name p)) p
-        -- add [ <qty> ] [List: products] [<total> <cur>] to the list
-        ((boxFixed 5 1 e) <++> (vFixed 1 lst) <++> hFill ' ' 1 <++> (return t))  >>= addToList l (e,lst)
-      remProduct l = do
-        r <- getSelected l
-        case r of
-          Nothing -> return ()
-          Just (i, _) -> removeFromList l i >> return ()
-
-  (products st) `onKeyPressed` \l k _ -> do
-    case k of
-      (KASCII '+') -> addProduct l >> updateSubtotal >> return True
-      (KASCII '-') -> remProduct l >> updateSubtotal >> return True
-      _ -> return False
 
   dlg `onDialogAccept` onAccept st
   dlg `onDialogCancel` onCancel st
