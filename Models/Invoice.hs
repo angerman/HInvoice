@@ -13,13 +13,18 @@ import Data.Time.Calendar (Day)
 import Data.Decimal
 
 data Period = Period Day Day deriving (Show)
+data ProductItem = ProductItem { qty :: Int
+                               , product :: Product
+                               , comment :: String }
+                 deriving (Show)
+
 data Invoice = Invoice { invoicePK :: Int
                        , invoiceID :: Int
                        , client :: Client -- (to one)
                        , period :: Period
                        , date :: Day
                        , due :: Day
-                       , products :: [(Int, Product)]
+                       , items :: [ProductItem]
                        , vat :: Decimal
                        , discount :: Decimal
                        , cashback :: Decimal }
@@ -44,7 +49,7 @@ instance ToRow Invoice where
               ,toField ddp, toField d -- discount
               ,toField cdp, toField c -- cashback
               ]
-    where (Invoice _ i (Client { clientPK = cpk }) (Period pf pt) dt du products (Decimal vdp v) (Decimal ddp d) (Decimal cdp c)) = inv
+    where (Invoice _ i (Client { clientPK = cpk }) (Period pf pt) dt du items (Decimal vdp v) (Decimal ddp d) (Decimal cdp c)) = inv
 
 mkInvoice = Invoice
 mkInvoice' a b c d e f g h i = mkInvoice a b c d e f [] g h i
@@ -52,7 +57,7 @@ mkInvoice' a b c d e f g h i = mkInvoice a b c d e f [] g h i
 insertInvoice conn inv = do
   execute conn "insert into invoices (id,client,`from`,`to`,`date`,`due`,vatDecimalPlaces,vat,discountDecimalPlaces,discount,cashbackDecimalPlaces,cashback) values (?,?,?,?,?,?,?,?,?,?,?,?)" inv
   id <- lastInsertRowId conn
-  mapM_ (\(q,p) -> execute conn "insert into invoices_products (invoice, product, quantity) values (?,?,?)" (id, productPK p, q)) (products inv)
+  mapM_ (\(ProductItem q p _) -> execute conn "insert into invoices_products (invoice, product, quantity) values (?,?,?)" (id, productPK p, q)) (items inv)
   return inv{ invoicePK = fromIntegral id }
 
 allInvoices conn = query_ conn "SELECT i.pk, i.id, c.*, i.`from`, i.`to`, i.date, i.due, i.vatDecimalPlaces, i.vat, i.discountDecimalPlaces, i.discount, i.cashbackDecimalPlaces, i.cashback FROM invoices AS i join clients AS c ON (i.client=c.pk)" :: IO [Invoice]
