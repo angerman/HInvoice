@@ -145,8 +145,8 @@ mkProductItem = do
 
   fg `onKeyPressed` \_ k m -> do
     case (k,m) of
-      (KASCII '[', [MCtrl]) -> scrollUp   product >> return True
-      (KASCII ']', [MCtrl]) -> scrollDown product >> return True
+      (KASCII '\8220', []) -> scrollUp   product >> return True -- Opt + [
+      (KASCII '\8216', []) -> scrollDown product >> return True -- Opt + ]
       _ -> return False
 
   qty `onKeyPressed` \w k m -> do
