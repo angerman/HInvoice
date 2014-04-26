@@ -4,8 +4,12 @@ import Graphics.Vty
 import Graphics.Vty.Widgets.All
 import Models.Product (Product(..))
 import Models.Invoice (mkInvoice, ProductItem(..), Period(..), Invoice(..))
-import ListUtils (dropSelected)
+import Control.Monad (liftM, forM_)
+import qualified ListUtils as LU
+import qualified Data.Text as T
 import Data.IORef
+import Data.Decimal
+import Text.Read (readMaybe)
 
 {-| sketch
 .-------- New Invoice -------------------------------------------------------------------.
@@ -44,10 +48,11 @@ selAttr = black `on` yellow -- XXX This should probably to into a separate (Conf
 -- | Let us first define the UI elements of this view. A suffix W will indicat it's
 --   a widget type.
 -- | First: the ProductListItem: [Qty (Edit)] [Product Name (List)] [Sum (Text)]
-type ProductItemW = Box (Box (Box (VFixed (HFixed Edit))
-                              (VFixed (List Product FormattedText)))
-                         HFill)
-                    FormattedText
+type ProductItemW = Box (Box (Box (Box (VFixed (HFixed Edit))
+                                   (VFixed (List Product FormattedText)))
+                              HFill)
+                         FormattedText)
+                    Edit
 -- | Next: The Product list, is a List of ProductItems.
 type ProductListW = List ProductItem ProductItemW
 data UI a = InvoiceUI { client   :: Widget Edit
@@ -72,6 +77,9 @@ data Controller a = InvoiceController { model :: IORef Invoice
                                       , ui :: UI a
                                       , vbind :: Invoice -> IO ()
                                       , vreturn :: IO Invoice }
+
+toDecimal :: Decimal -> T.Text -> Decimal
+toDecimal d = maybe d id . readMaybe . T.unpack
                                     
 -- mkUI :: IO (UI a)
 mkInvoiceUI = do
@@ -79,7 +87,7 @@ mkInvoiceUI = do
   client:date:due:from:to:vat:discount:cashback:_ <- (sequence . take 8 . repeat) editWidget
   -- create the plain text widgets (Labels)
   subtotal:totalVAT:totalDiscount:total:_ <- sequence . take 4 . repeat $ plainText "0.00 XXX"
-  products <- newList selAttr 1
+  products <- newList selAttr 2
   -- setup the focus group
   fg <- newFocusGroup
   mapM_ (addToFocusGroup fg) [client, date, due, from, to]
@@ -123,20 +131,59 @@ mkInvoiceUI = do
   -- return the invoiceUI
   return $ InvoiceUI client date due from to products vat discount cashback subtotal totalVAT totalDiscount total widget fg
 
+mkProductItem = do
+  qty <- editWidget
+  product <- newList selAttr 1
+  forM_ ["Foo","Bar","Baz"] $ \l ->
+    (addToList product undefined =<< plainText l)
+  total <- plainText ""
+  comment <- editWidget
+
+  fg <- newFocusGroup
+  _ <- addToFocusGroup fg qty
+  _ <- addToFocusGroup fg comment
+
+  fg `onKeyPressed` \_ k m -> do
+    case (k,m) of
+      (KASCII '[', [MCtrl]) -> scrollUp   product >> return True
+      (KASCII ']', [MCtrl]) -> scrollDown product >> return True
+      _ -> return False
+
+  qty `onKeyPressed` \w k m -> do
+    foc <- focused <~ w
+    if foc
+       then case (k,m) of
+         (KASCII 'n', [MCtrl]) -> focus comment >> return True
+         _ -> return False
+      else handleKeyEvent fg k m
+  comment `onKeyPressed` \w k m -> do
+    foc <- focused <~ w
+    if foc
+       then case (k,m) of
+         (KASCII 'p', [MCtrl]) -> focus qty >> return True
+         _ -> return False
+      else handleKeyEvent fg k m
+  ((boxFixed 5 1 qty) <++> vFixed 1 product <++> hFill ' ' 1 <++> (return total)) <--> (return comment)
+
 mkInvoiceController = do
   -- create the backing ref
+  -- XXX: I hate this.  Having to instantiate an "empty" Invoice is kinda stupid.
   ref <- newIORef (Invoice undefined undefined undefined undefined undefined undefined []
                    undefined undefined undefined)
   -- crete the UI
   invoiceUI <- mkInvoiceUI
   -- setup UI interactions
   e <- editWidget
-  lst <- newList selAttr 1
+--  lst <- newList selAttr 1
   t <- plainText "foo"
+  let pct = (/100) . toDecimal 0
+      getVAT = liftM pct . getEditText $ Views.Invoice.vat invoiceUI
+      getDiscount = liftM (negate . pct) . getEditText $ Views.Invoice.discount invoiceUI
+      
   products invoiceUI `onKeyPressed` \l k _ -> do
     case k of
-      (KASCII '+') -> ((boxFixed 5 1 e) <++> (vFixed 1 lst) <++> hFill ' ' 1 <++> (return t)) >>= addToList l undefined >> return True
-      (KASCII '-') -> dropSelected l >> return True
+      (KASCII '+') -> mkProductItem >>= addToList l undefined >> return True
+      (KASCII '-') -> LU.dropSelected l >> return True
       _ -> return False
   -- setup the bindings
   let bind' inv = do
