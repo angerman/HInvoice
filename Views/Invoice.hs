@@ -222,12 +222,39 @@ mkInvoiceController prods@(p0:_) = do
         len <- getListSize $ products invoiceUI
         items <- catMaybes <$> mapM (getListItem (products invoiceUI)) [0..len]
         -- we only check the currency for the first product.
-        pi:_ <- mapM (readIORef . fst) items
-        return $ currency (Models.Invoice.product pi)
+        pis <- mapM (readIORef . fst) items
+        case pis of
+          pi:_ -> return $ currency (Models.Invoice.product pi)
+          _ -> return $ ""
+        
+      computeDiscount = (\d t   -> d * t) <$> getDiscount <*> computeProductsTotal
+      computeVAT      = (\d v t -> v * (1+d) * t) <$> getDiscount <*> getVAT <*> computeProductsTotal      
+      computeTotal    = (\d v t -> (1+v) * (1+d) * t) <$> getDiscount <*> getVAT <*> computeProductsTotal
 
+      formatPrice p c = show p ++ " " ++ c
+      updateVAT =
+        formatPrice <$> computeVAT <*> productsCurrency
+        >>= setText (totalVAT invoiceUI) . T.pack
+      updateDiscount =
+        formatPrice <$> computeDiscount <*> productsCurrency
+        >>= setText (totalDiscount invoiceUI) . T.pack
+      updateSubtotal =
+        formatPrice <$> computeProductsTotal <*> productsCurrency
+        >>= setText (subtotal invoiceUI) . T.pack
+      updateTotal =
+        formatPrice <$> computeTotal <*> productsCurrency
+        >>= setText (total invoiceUI) . T.pack
+
+      updateAll = updateSubtotal >> updateDiscount >> updateVAT >> updateTotal
+      
   -- key events.
-  Views.Invoice.vat invoiceUI `onChange` \_ -> (\x y -> show x ++ " " ++ y) <$> computeProductsTotal <*> productsCurrency >>= setText (subtotal invoiceUI) . T.pack
-    
+  Views.Invoice.vat invoiceUI `onChange` \_ -> updateAll
+  Views.Invoice.discount invoiceUI `onChange` \_ -> updateAll
+
+  -- set default values
+  _ <- setEditText (Views.Invoice.discount invoiceUI) $ T.pack (show 0)
+  _ <- setEditText (Views.Invoice.vat invoiceUI) $ T.pack (show 19)
+  
   -- setup the bindings
   let bind' inv = do
         writeIORef ref inv
