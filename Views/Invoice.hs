@@ -135,7 +135,7 @@ mkInvoiceUI = do
   -- return the invoiceUI
   return $ InvoiceUI client date due from to products vat discount cashback subtotal totalVAT totalDiscount total widget fg
 
-mkProductItem products product = do
+mkProductItem products product changeCB = do
   ref <- newIORef product
   qtyW <- editWidget
   -- populate the product list with the products
@@ -179,12 +179,15 @@ mkProductItem products product = do
   qtyW `onChange` \t -> do
     modifyIORef' ref $ \x -> x{ qty = (fromMaybe 1 . readMaybe . T.unpack) t }
     updateTotal
+    -- call the callback
+    changeCB
+  
   commentW `onChange` \t -> modifyIORef' ref $ \x -> x{ comment = T.unpack t }
 
   -- list events
   productW `onSelectionChange` \(SelectionOn _ p _) -> do
     modifyIORef' ref $ \x -> x{ Models.Invoice.product = p }
-    updateTotal
+    updateTotal >> changeCB
 
   -- set initial values
   readIORef ref >>= \x -> setEditText qtyW (T.pack . show . qty $ x)
@@ -202,20 +205,12 @@ mkInvoiceController prods@(p0:_) = do
                    undefined undefined undefined)
   -- crete the UI
   invoiceUI <- mkInvoiceUI
-  -- setup UI interactions
-  e <- editWidget
-  t <- plainText "foo"
+
+  -- helper
   let pct = (/100) . toDecimal 0
       getVAT = liftM pct . getEditText $ Views.Invoice.vat invoiceUI
       getDiscount = liftM (negate . pct) . getEditText $ Views.Invoice.discount invoiceUI
-      
-  products invoiceUI `onKeyPressed` \l k _ ->
-    case k of
-      (KASCII '+') -> mkProductItem prods (ProductItem 1 p0 "") >>= uncurry (addToList l) >> return True
-      (KASCII '-') -> LU.dropSelected l >> return True
-      _ -> return False
-  -- helper
-  let computeProductsTotal = do
+      computeProductsTotal = do
         len <- getListSize $ products invoiceUI
         items <- catMaybes <$> mapM (getListItem (products invoiceUI)) [0..len]
         pis <- mapM (readIORef . fst) items
@@ -248,7 +243,19 @@ mkInvoiceController prods@(p0:_) = do
         >>= setText (total invoiceUI) . T.pack
 
       updateAll = updateSubtotal >> updateDiscount >> updateVAT >> updateTotal
-      
+  
+  -- setup UI interactions
+  e <- editWidget
+  t <- plainText "foo"
+
+  products invoiceUI `onKeyPressed` \l k _ ->
+    case k of
+      (KASCII '+') -> mkProductItem prods (ProductItem 1 p0 "") updateAll >>= uncurry (addToList l) >> return True
+      (KASCII '-') -> LU.dropSelected l >> return True
+      _ -> return False
+  -- list events
+  products invoiceUI `onItemAdded` \_ -> updateAll
+  products invoiceUI `onItemRemoved` \_ -> updateAll
   -- key events.
   Views.Invoice.vat invoiceUI `onChange` \_ -> updateAll
   Views.Invoice.discount invoiceUI `onChange` \_ -> updateAll
