@@ -210,21 +210,21 @@ mkInvoiceController prods@(p0:_) = do
   let pct = (/100) . toDecimal 0
       getVAT = liftM pct . getEditText $ Views.Invoice.vat invoiceUI
       getDiscount = liftM (negate . pct) . getEditText $ Views.Invoice.discount invoiceUI
-      computeProductsTotal = do
+      allItems = do
         len <- getListSize $ products invoiceUI
         items <- catMaybes <$> mapM (getListItem (products invoiceUI)) [0..len]
-        pis <- mapM (readIORef . fst) items
+        mapM (readIORef . fst) items
+      computeProductsTotal = do
+        pis <- allItems
         return $ sum (map productItemTotal pis)
       productsCurrency = do
-        len <- getListSize $ products invoiceUI
-        items <- catMaybes <$> mapM (getListItem (products invoiceUI)) [0..len]
         -- we only check the currency for the first product.
-        pis <- mapM (readIORef . fst) items
+        pis <- allItems
         case pis of
           pi:_ -> return $ currency (Models.Invoice.product pi)
-          _ -> return $ ""
+          _ -> return ""
         
-      computeDiscount = (\d t   -> d * t) <$> getDiscount <*> computeProductsTotal
+      computeDiscount = (*) <$> getDiscount <*> computeProductsTotal
       computeVAT      = (\d v t -> v * (1+d) * t) <$> getDiscount <*> getVAT <*> computeProductsTotal      
       computeTotal    = (\d v t -> (1+v) * (1+d) * t) <$> getDiscount <*> getVAT <*> computeProductsTotal
 
@@ -251,11 +251,11 @@ mkInvoiceController prods@(p0:_) = do
       (KASCII '-') -> LU.dropSelected l >> return True
       _ -> return False
   -- list events
-  products invoiceUI `onItemAdded` \_ -> updateAll
-  products invoiceUI `onItemRemoved` \_ -> updateAll
+  products invoiceUI `onItemAdded` const updateAll
+  products invoiceUI `onItemRemoved` const updateAll
   -- key events.
-  Views.Invoice.vat invoiceUI `onChange` \_ -> updateAll
-  Views.Invoice.discount invoiceUI `onChange` \_ -> updateAll
+  Views.Invoice.vat invoiceUI `onChange` const updateAll
+  Views.Invoice.discount invoiceUI `onChange` const updateAll
 
   -- set default values
   _ <- setEditText (Views.Invoice.discount invoiceUI) $ T.pack (show 0)
