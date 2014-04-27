@@ -105,8 +105,10 @@ mkInvoiceUI = do
             ((plainText " Qty" >>= boxFixed 6 1) <++> plainText "Product" <++> hFill ' '1 <++> plainText "Total ") <-->
         (vFixed 8 =<< (vBorder <++> return products <++> vBorder))
         <-->
-        (plainText "+/- to add / remove products" <++>
-         hFill ' ' 1 <++>
+        (
+        plainText "+ / - to add / remove products\nC-[ / C-] to change product\nC-p / C-n to cycle "
+        <++>
+        ((hFill ' ' 1 <++>
          plainText "Subtotal: " <++>
          boxFixed 10 1 subtotal)
         <-->
@@ -120,7 +122,7 @@ mkInvoiceUI = do
          plainText "VAT:" <++>
          boxFixed 4 1 vat <++>
          plainText "% " <++>
-         boxFixed 10 1 totalVAT)
+         boxFixed 10 1 totalVAT)))
         <-->
         -- ((hFill ' ' 1) <++>
         --  (plainText "cashback:") <++>
