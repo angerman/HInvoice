@@ -245,9 +245,6 @@ mkInvoiceController prods@(p0:_) = do
       updateAll = updateSubtotal >> updateDiscount >> updateVAT >> updateTotal
   
   -- setup UI interactions
-  e <- editWidget
-  t <- plainText "foo"
-
   products invoiceUI `onKeyPressed` \l k _ ->
     case k of
       (KASCII '+') -> mkProductItem prods (ProductItem 1 p0 "") updateAll >>= uncurry (addToList l) >> return True
