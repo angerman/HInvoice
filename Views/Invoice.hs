@@ -12,6 +12,7 @@ import Data.IORef
 import Data.Decimal
 import Text.Read (readMaybe)
 import Data.Maybe (fromMaybe, catMaybes)
+import Data.Time.Calendar (addDays)
 
 {-| sketch
 .-------- New Invoice -------------------------------------------------------------------.
@@ -201,7 +202,7 @@ mkProductItem products product changeCB = do
 mkInvoiceController prods@(p0:_) = do
   -- create the backing ref
   -- XXX: I hate this.  Having to instantiate an "empty" Invoice is kinda stupid.
-  ref <- newIORef (Invoice undefined undefined undefined undefined undefined undefined []
+  ref <- newIORef (Invoice undefined undefined undefined (Period Nothing Nothing) Nothing Nothing []
                    undefined undefined undefined)
   -- crete the UI
   invoiceUI <- mkInvoiceUI
@@ -256,7 +257,21 @@ mkInvoiceController prods@(p0:_) = do
   -- key events.
   Views.Invoice.vat invoiceUI `onChange` const updateAll
   Views.Invoice.discount invoiceUI `onChange` const updateAll
-
+  -- text events
+  Views.Invoice.date invoiceUI `onChange` \t ->
+    case readMaybe (T.unpack t) of
+      Just d -> do
+        modifyIORef' ref $ \x -> x{ Models.Invoice.date = Just d }
+        setEditText (Views.Invoice.due invoiceUI) $ T.pack . show $ addDays 14 d
+      Nothing -> return ()
+  Views.Invoice.due invoiceUI `onChange` \t ->
+    modifyIORef' ref $ \x -> x{ Models.Invoice.due = readMaybe (T.unpack t) }
+  Views.Invoice.from invoiceUI `onChange` \t ->
+    modifyIORef' ref $ \x@(Invoice{ period = (Period _ b) }) ->
+    x{period = Period (readMaybe (T.unpack t)) b}
+  Views.Invoice.to invoiceUI `onChange` \t ->
+    modifyIORef' ref $ \x@(Invoice{ period = (Period a _) }) ->
+    x{period = (Period a (readMaybe (T.unpack t))) }
   -- set default values
   _ <- setEditText (Views.Invoice.discount invoiceUI) $ T.pack (show 0)
   _ <- setEditText (Views.Invoice.vat invoiceUI) $ T.pack (show 19)

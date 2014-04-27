@@ -12,7 +12,7 @@ import Models.Product
 import Data.Time.Calendar (Day)
 import Data.Decimal
 
-data Period = Period Day Day deriving (Show)
+data Period = Period (Maybe Day) (Maybe Day) deriving (Show)
 data ProductItem = ProductItem { qty :: Int
                                , product :: Product
                                , comment :: String }
@@ -24,8 +24,8 @@ data Invoice = Invoice { invoicePK :: Int
                        , invoiceID :: Int
                        , client :: Client -- (to one)
                        , period :: Period
-                       , date :: Day
-                       , due :: Day
+                       , date :: Maybe Day
+                       , due :: Maybe Day
                        , items :: [ProductItem]
                        , vat :: Decimal
                        , discount :: Decimal
