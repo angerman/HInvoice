@@ -152,7 +152,8 @@ mkProductItem products product = do
   let updateTotal = do
         q <- fromIntegral . qty <$> readIORef ref
         p <- (price . Models.Invoice.product) <$> readIORef ref
-        setText totalW $ T.pack . show $ p * q
+        c <- (currency . Models.Invoice.product) <$> readIORef ref
+        setText totalW $ T.pack $ show (p * q) ++ " " ++ c
   -- key events
   qtyW `onKeyPressed` \w k m -> do
     foc <- focused <~ w
@@ -202,7 +203,6 @@ mkInvoiceController prods@(p0:_) = do
   invoiceUI <- mkInvoiceUI
   -- setup UI interactions
   e <- editWidget
---  lst <- newList selAttr 1
   t <- plainText "foo"
   let pct = (/100) . toDecimal 0
       getVAT = liftM pct . getEditText $ Views.Invoice.vat invoiceUI
