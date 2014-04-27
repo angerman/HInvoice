@@ -11,7 +11,7 @@ import Models.Product
 import Models.Invoice
 import Views.AddClient
 import Views.AddProduct
-import Views.AddInvoice
+import Views.Invoice (mkInvoiceController, UI(..), Controller(..))
 
 companyName = "HInvoice"
 version = "v0.1"
@@ -133,6 +133,7 @@ invoiceListUI app = do
           invoices <- allInvoices $ getConn app
           mapM_ (\c -> addToList (getInvoiceList app) c =<< (plainText . T.pack $ Models.Invoice.name c)) invoices
 
+{-
 showInvoiceAddUI app completion = do
   (iaui, iafg) <- newInvoiceAddDialog (getConn app) (allProducts $ getConn app) onAccept onCancel
   switchToAdd <- addToCollection (getUIs app) iaui iafg
@@ -142,6 +143,7 @@ showInvoiceAddUI app completion = do
           insertInvoice (getConn app) =<< inv
           completion
         onCancel _ = const completion
+-}
 --------------------------------------------------------------------------------
 mainUI conn = do
 
@@ -150,10 +152,22 @@ mainUI conn = do
   (clui, clfg) <- clientListUI app
   (pdui, pdfg) <- productListUI app
   (inui, infg) <- invoiceListUI app
+  invoiceC <- mkInvoiceController =<< (allProducts $ getConn app)
+
+  let invoiceUI = ui invoiceC
+      
+  -- add the containing widget
+  (dlg, dfg) <- newDialog (widget invoiceUI) "New Invoice"
+  mfg <- mergeFocusGroups (fg invoiceUI) dfg
 
   switchToClientList <- addToCollection (getUIs app) clui clfg
   switchToProductList <- addToCollection (getUIs app) pdui pdfg
   switchToInvoiceList <- addToCollection (getUIs app) inui infg
+  switchToNewInvoice  <- addToCollection (getUIs app) (dialogWidget dlg) mfg
+
+
+  dlg `onDialogAccept` \_ -> switchToInvoiceList
+  dlg `onDialogCancel` \_ -> switchToInvoiceList
 
 --  (caui, cafg) <- clientAddUI (const $ switchToClientList) (const $ switchToClientList)
 --  switchToClientAdd  <- addToCollection c caui cafg
@@ -179,7 +193,7 @@ mainUI conn = do
     case (k, mods) of
       (KASCII 'p', [MCtrl]) -> switchToProductList >> return True
       (KASCII 'n', [MCtrl]) -> switchToClientList >> return True
-      (KASCII 'a', _) -> showInvoiceAddUI app switchToInvoiceList >> return True
+      (KASCII 'a', _) -> switchToNewInvoice >> return True
       (KASCII 'q', _) -> shutdownUi >> return True
       _ -> return False
 

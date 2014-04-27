@@ -4,6 +4,7 @@ import Graphics.Vty
 import Graphics.Vty.Widgets.All
 import Models.Product (Product(..))
 import Models.Invoice (mkInvoice, ProductItem(..), productItemTotal, Period(..), Invoice(..))
+import Models.Client (Client(..))
 import Control.Monad (liftM, forM_, replicateM)
 import Control.Applicative ((<$>),(<*>))
 import qualified ListUtils as LU
@@ -141,7 +142,7 @@ mkProductItem products product changeCB = do
   qtyW <- editWidget
   -- populate the product list with the products
   productW <- newList selAttr 1
-  forM_ products $ \p@Product{name=n} ->
+  forM_ products $ \p@Product{Models.Product.name=n} ->
     plainText (T.pack n) >>= addToList productW p
     
   totalW <- plainText ""
@@ -202,8 +203,10 @@ mkProductItem products product changeCB = do
 mkInvoiceController prods@(p0:_) = do
   -- create the backing ref
   -- XXX: I hate this.  Having to instantiate an "empty" Invoice is kinda stupid.
-  ref <- newIORef (Invoice undefined undefined undefined (Period Nothing Nothing) Nothing Nothing []
-                   undefined undefined undefined)
+  let mkNewInvoiceRef :: IO (IORef Invoice)
+      mkNewInvoiceRef = newIORef (Invoice (-1) (-1) EmptyClient (Period Nothing Nothing) Nothing Nothing [] 0.19 0.0 0.0)
+  ref <- mkNewInvoiceRef
+                   
   -- crete the UI
   invoiceUI <- mkInvoiceUI
 
@@ -243,7 +246,14 @@ mkInvoiceController prods@(p0:_) = do
         formatPrice <$> computeTotal <*> productsCurrency
         >>= setText (total invoiceUI) . T.pack
 
-      updateAll = updateSubtotal >> updateDiscount >> updateVAT >> updateTotal
+      updateItems :: [ProductItem] -> Invoice -> Invoice
+      updateItems i p = p{Models.Invoice.items = i}
+      updateRef = do
+        itms <- allItems
+        modifyIORef' ref (updateItems itms)
+        return ()
+  
+      updateAll = updateRef >> updateSubtotal >> updateDiscount >> updateVAT >> updateTotal
   
   -- setup UI interactions
   products invoiceUI `onKeyPressed` \l k _ ->
@@ -279,13 +289,14 @@ mkInvoiceController prods@(p0:_) = do
   -- setup the bindings
   let bind' inv = do
         writeIORef ref inv
+        -- XXX update the UI with the new ref.
         return ()
   return $ InvoiceController ref invoiceUI bind' (readIORef ref)
 
 -- Test
 main = do
-  let products = [Product undefined "Product A" 75.00 1 "EUR"
-                 ,Product undefined "Product B" 35.00 2 "EUR"]
+  let products = [Product (-1) "Product A" 75.00 1 "EUR"
+                 ,Product (-1) "Product B" 35.00 2 "EUR"]
   invoiceC <- mkInvoiceController products
   let invoiceUI = ui invoiceC
       
@@ -296,6 +307,10 @@ main = do
   c <- newCollection
   _ <- addToCollection c (dialogWidget dlg) mfg
   mfg `onKeyPressed` \_ k _ -> case k of
-    KASCII 'q' -> shutdownUi >> return True
+    KASCII 'q' -> do
+      shutdownUi
+      inv <- vreturn invoiceC
+      _ <- putStrLn $ show inv
+      return True
     _ -> return False
   runUi c defaultContext

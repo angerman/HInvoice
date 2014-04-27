@@ -18,6 +18,7 @@ data Client = Client { clientPK :: Int
                      , name :: String
                      , address :: Address
                      , vatNo :: Maybe String }
+            | EmptyClient
               deriving (Show)
                        
 instance FromRow Client where
