@@ -3,15 +3,15 @@ module Views.Invoice where
 import Graphics.Vty
 import Graphics.Vty.Widgets.All
 import Models.Product (Product(..))
-import Models.Invoice (mkInvoice, ProductItem(..), Period(..), Invoice(..))
+import Models.Invoice (mkInvoice, ProductItem(..), productItemTotal, Period(..), Invoice(..))
 import Control.Monad (liftM, forM_, replicateM)
-import Control.Applicative ((<$>))
+import Control.Applicative ((<$>),(<*>))
 import qualified ListUtils as LU
 import qualified Data.Text as T
 import Data.IORef
 import Data.Decimal
 import Text.Read (readMaybe)
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, catMaybes)
 
 {-| sketch
 .-------- New Invoice -------------------------------------------------------------------.
@@ -150,10 +150,9 @@ mkProductItem products product = do
 
   -- update logic
   let updateTotal = do
-        q <- fromIntegral . qty <$> readIORef ref
-        p <- (price . Models.Invoice.product) <$> readIORef ref
+        t <- productItemTotal <$> readIORef ref
         c <- (currency . Models.Invoice.product) <$> readIORef ref
-        setText totalW $ T.pack $ show (p * q) ++ " " ++ c
+        setText totalW $ T.pack $ show t ++ " " ++ c
   -- key events
   qtyW `onKeyPressed` \w k m -> do
     foc <- focused <~ w
@@ -213,6 +212,22 @@ mkInvoiceController prods@(p0:_) = do
       (KASCII '+') -> mkProductItem prods (ProductItem 1 p0 "") >>= uncurry (addToList l) >> return True
       (KASCII '-') -> LU.dropSelected l >> return True
       _ -> return False
+  -- helper
+  let computeProductsTotal = do
+        len <- getListSize $ products invoiceUI
+        items <- catMaybes <$> mapM (getListItem (products invoiceUI)) [0..len]
+        pis <- mapM (readIORef . fst) items
+        return $ sum (map productItemTotal pis)
+      productsCurrency = do
+        len <- getListSize $ products invoiceUI
+        items <- catMaybes <$> mapM (getListItem (products invoiceUI)) [0..len]
+        -- we only check the currency for the first product.
+        pi:_ <- mapM (readIORef . fst) items
+        return $ currency (Models.Invoice.product pi)
+
+  -- key events.
+  Views.Invoice.vat invoiceUI `onChange` \_ -> (\x y -> show x ++ " " ++ y) <$> computeProductsTotal <*> productsCurrency >>= setText (subtotal invoiceUI) . T.pack
+    
   -- setup the bindings
   let bind' inv = do
         writeIORef ref inv

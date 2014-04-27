@@ -18,6 +18,8 @@ data ProductItem = ProductItem { qty :: Int
                                , comment :: String }
                  deriving (Show)
 
+productItemTotal pi@(ProductItem q p _) = (fromIntegral q) * (price p)
+
 data Invoice = Invoice { invoicePK :: Int
                        , invoiceID :: Int
                        , client :: Client -- (to one)
