@@ -4,12 +4,14 @@ import Graphics.Vty
 import Graphics.Vty.Widgets.All
 import Models.Product (Product(..))
 import Models.Invoice (mkInvoice, ProductItem(..), Period(..), Invoice(..))
-import Control.Monad (liftM, forM_)
+import Control.Monad (liftM, forM_, replicateM)
+import Control.Applicative ((<$>))
 import qualified ListUtils as LU
 import qualified Data.Text as T
 import Data.IORef
 import Data.Decimal
 import Text.Read (readMaybe)
+import Data.Maybe (fromMaybe)
 
 {-| sketch
 .-------- New Invoice -------------------------------------------------------------------.
@@ -54,7 +56,7 @@ type ProductItemW = Box (Box (Box (Box (VFixed (HFixed Edit))
                          FormattedText)
                     Edit
 -- | Next: The Product list, is a List of ProductItems.
-type ProductListW = List ProductItem ProductItemW
+type ProductListW = List (IORef ProductItem) ProductItemW
 data UI a = InvoiceUI { client   :: Widget Edit
                       , date     :: Widget Edit
                       , due      :: Widget Edit
@@ -79,14 +81,14 @@ data Controller a = InvoiceController { model :: IORef Invoice
                                       , vreturn :: IO Invoice }
 
 toDecimal :: Decimal -> T.Text -> Decimal
-toDecimal d = maybe d id . readMaybe . T.unpack
+toDecimal d = fromMaybe d . readMaybe . T.unpack
                                     
 -- mkUI :: IO (UI a)
 mkInvoiceUI = do
   -- create the edit widget
-  client:date:due:from:to:vat:discount:cashback:_ <- (sequence . take 8 . repeat) editWidget
+  client:date:due:from:to:vat:discount:cashback:_ <- replicateM 8 editWidget
   -- create the plain text widgets (Labels)
-  subtotal:totalVAT:totalDiscount:total:_ <- sequence . take 4 . repeat $ plainText "0.00 XXX"
+  subtotal:totalVAT:totalDiscount:total:_ <- replicateM 4 $ plainText "0.00 XXX"
   products <- newList selAttr 2
   -- setup the focus group
   fg <- newFocusGroup
@@ -94,31 +96,31 @@ mkInvoiceUI = do
   _ <- addToFocusGroup fg products
   mapM_ (addToFocusGroup fg) [discount, vat]
   -- build the widget
-  widget <- ((((plainText "Client:") <++> (boxFixed 5 1 client)) >>= withPadding (padBottom 1)) <-->
-            (((plainText "Date:") <++> (boxFixed 11 1 date) <++>
-              (plainText " Due:") <++> (boxFixed 11 1 due)) >>= withPadding (padBottom 1)) <-->
-            (plainText "Period") <-->
-            (((plainText "From:") <++> (boxFixed 11 1 from) <++>
-              (plainText " to:")  <++> (boxFixed 11 1 to)) >>= withPadding (padBottom 1))  <-->
-            (((plainText " Qty") >>= boxFixed 6 1) <++> (plainText "Product") <++> (hFill ' '1) <++> (plainText "Total ")) <-->
+  widget <- (((plainText "Client:" <++> boxFixed 5 1 client) >>= withPadding (padBottom 1)) <-->
+            ((plainText "Date:" <++> boxFixed 11 1 date <++>
+              plainText " Due:" <++> boxFixed 11 1 due) >>= withPadding (padBottom 1)) <-->
+            plainText "Period" <-->
+            ((plainText "From:" <++> boxFixed 11 1 from <++>
+              plainText " to:"  <++> boxFixed 11 1 to) >>= withPadding (padBottom 1))  <-->
+            ((plainText " Qty" >>= boxFixed 6 1) <++> plainText "Product" <++> hFill ' '1 <++> plainText "Total ") <-->
         (vFixed 8 =<< (vBorder <++> return products <++> vBorder))
         <-->
-        ((plainText "+/- to add / remove products") <++>
-         (hFill ' ' 1) <++>
-         (plainText "Subtotal: ") <++>
-         (boxFixed 10 1 subtotal))
+        (plainText "+/- to add / remove products" <++>
+         hFill ' ' 1 <++>
+         plainText "Subtotal: " <++>
+         boxFixed 10 1 subtotal)
         <-->
-        ((hFill ' ' 1) <++>
-         (plainText "Discount:") <++>
-         (boxFixed 4 1 discount) <++>
-         (plainText "% ") <++>
-         (boxFixed 10 1 totalDiscount))
+        (hFill ' ' 1 <++>
+         plainText "Discount:" <++>
+         boxFixed 4 1 discount <++>
+         plainText "% " <++>
+         boxFixed 10 1 totalDiscount)
         <-->
-        ((hFill ' ' 1) <++>
-         (plainText "VAT:") <++>
-         (boxFixed 4 1 vat) <++>
-         (plainText "% ") <++>
-         (boxFixed 10 1 totalVAT))
+        (hFill ' ' 1 <++>
+         plainText "VAT:" <++>
+         boxFixed 4 1 vat <++>
+         plainText "% " <++>
+         boxFixed 10 1 totalVAT)
         <-->
         -- ((hFill ' ' 1) <++>
         --  (plainText "cashback:") <++>
@@ -126,46 +128,72 @@ mkInvoiceUI = do
         --  (plainText "%") <++>
         --  (boxFixed 7 1 totalCashback'))
         -- <-->
-        (((hFill ' ' 1) <++> (plainText "Total: ") <++> (boxFixed 10 1 total))
+        ((hFill ' ' 1 <++> plainText "Total: " <++> boxFixed 10 1 total)
          >>= withPadding (padTop 1))) >>= withPadding (padLeft 2) >>= withPadding (padRight 2)
   -- return the invoiceUI
   return $ InvoiceUI client date due from to products vat discount cashback subtotal totalVAT totalDiscount total widget fg
 
-mkProductItem = do
-  qty <- editWidget
-  product <- newList selAttr 1
-  forM_ ["Foo","Bar","Baz"] $ \l ->
-    (addToList product undefined =<< plainText l)
-  total <- plainText ""
-  comment <- editWidget
+mkProductItem products product = do
+  ref <- newIORef product
+  qtyW <- editWidget
+  -- populate the product list with the products
+  productW <- newList selAttr 1
+  forM_ products $ \p@Product{name=n} ->
+    plainText (T.pack n) >>= addToList productW p
+    
+  totalW <- plainText ""
+  commentW <- editWidget
 
   fg <- newFocusGroup
-  _ <- addToFocusGroup fg qty
-  _ <- addToFocusGroup fg comment
+  _ <- addToFocusGroup fg qtyW
+  _ <- addToFocusGroup fg commentW
 
-  fg `onKeyPressed` \_ k m -> do
-    case (k,m) of
-      (KASCII '\8220', []) -> scrollUp   product >> return True -- Opt + [
-      (KASCII '\8216', []) -> scrollDown product >> return True -- Opt + ]
-      _ -> return False
-
-  qty `onKeyPressed` \w k m -> do
+  -- update logic
+  let updateTotal = do
+        q <- fromIntegral . qty <$> readIORef ref
+        p <- (price . Models.Invoice.product) <$> readIORef ref
+        setText totalW $ T.pack . show $ p * q
+  -- key events
+  qtyW `onKeyPressed` \w k m -> do
     foc <- focused <~ w
     if foc
        then case (k,m) of
-         (KASCII 'n', [MCtrl]) -> focus comment >> return True
+         (KASCII 'n', [MCtrl]) -> focus commentW >> return True
+         (KASCII '\8220', []) -> scrollUp   productW >> return True -- Opt + [
+         (KASCII '\8216', []) -> scrollDown productW >> return True -- Opt + ]
          _ -> return False
       else handleKeyEvent fg k m
-  comment `onKeyPressed` \w k m -> do
+  commentW `onKeyPressed` \w k m -> do
     foc <- focused <~ w
     if foc
        then case (k,m) of
-         (KASCII 'p', [MCtrl]) -> focus qty >> return True
+         (KASCII 'p', [MCtrl]) -> focus qtyW >> return True
+         (KASCII '\8220', []) -> scrollUp   productW >> return True -- Opt + [
+         (KASCII '\8216', []) -> scrollDown productW >> return True -- Opt + ]
          _ -> return False
       else handleKeyEvent fg k m
-  ((boxFixed 5 1 qty) <++> vFixed 1 product <++> hFill ' ' 1 <++> (return total)) <--> (return comment)
 
-mkInvoiceController = do
+  -- text events
+  qtyW `onChange` \t -> do
+    modifyIORef' ref $ \x -> x{ qty = (fromMaybe 1 . readMaybe . T.unpack) t }
+    updateTotal
+  commentW `onChange` \t -> modifyIORef' ref $ \x -> x{ comment = T.unpack t }
+
+  -- list events
+  productW `onSelectionChange` \(SelectionOn _ p _) -> do
+    modifyIORef' ref $ \x -> x{ Models.Invoice.product = p }
+    updateTotal
+
+  -- set initial values
+  readIORef ref >>= \x -> setEditText qtyW (T.pack . show . qty $ x)
+  readIORef ref >>= \x -> setEditText commentW (T.pack . comment $ x)
+
+  widget <- (boxFixed 5 1 qtyW <++> vFixed 1 productW <++> hFill ' ' 1 <++> return totalW)
+            <--> return commentW
+
+  return (ref, widget)
+
+mkInvoiceController prods@(p0:_) = do
   -- create the backing ref
   -- XXX: I hate this.  Having to instantiate an "empty" Invoice is kinda stupid.
   ref <- newIORef (Invoice undefined undefined undefined undefined undefined undefined []
@@ -180,9 +208,9 @@ mkInvoiceController = do
       getVAT = liftM pct . getEditText $ Views.Invoice.vat invoiceUI
       getDiscount = liftM (negate . pct) . getEditText $ Views.Invoice.discount invoiceUI
       
-  products invoiceUI `onKeyPressed` \l k _ -> do
+  products invoiceUI `onKeyPressed` \l k _ ->
     case k of
-      (KASCII '+') -> mkProductItem >>= addToList l undefined >> return True
+      (KASCII '+') -> mkProductItem prods (ProductItem 1 p0 "") >>= uncurry (addToList l) >> return True
       (KASCII '-') -> LU.dropSelected l >> return True
       _ -> return False
   -- setup the bindings
@@ -193,7 +221,9 @@ mkInvoiceController = do
 
 -- Test
 main = do
-  invoiceC <- mkInvoiceController
+  let products = [Product undefined "Product A" 75.00 1 "EUR"
+                 ,Product undefined "Product B" 35.00 2 "EUR"]
+  invoiceC <- mkInvoiceController products
   let invoiceUI = ui invoiceC
       
   -- add the containing widget
