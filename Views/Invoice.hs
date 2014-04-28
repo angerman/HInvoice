@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Views.Invoice where
-import Graphics.Vty
+import Graphics.Vty hiding (Button)
 import Graphics.Vty.Widgets.All
 import Models.Product (Product(..))
 import Models.Invoice (mkInvoice, ProductItem(..), productItemTotal, Period(..), Invoice(..))
@@ -59,7 +59,7 @@ type ProductItemW = Box (Box (Box (Box (VFixed (HFixed Edit))
                     Edit
 -- | Next: The Product list, is a List of ProductItems.
 type ProductListW = List (IORef ProductItem) ProductItemW
-data UI a = InvoiceUI { client   :: Widget Edit
+data UI a = InvoiceUI { clientList :: Widget (List Client FormattedText)
                       , date     :: Widget Edit
                       , due      :: Widget Edit
                       , from     :: Widget Edit
@@ -88,17 +88,19 @@ toDecimal d = fromMaybe d . readMaybe . T.unpack
 -- mkUI :: IO (UI a)
 mkInvoiceUI = do
   -- create the edit widget
-  client:date:due:from:to:vat:discount:cashback:_ <- replicateM 8 editWidget
+  date:due:from:to:vat:discount:cashback:_ <- replicateM 7 editWidget
+  clientList <- newList selAttr 1
   -- create the plain text widgets (Labels)
   subtotal:totalVAT:totalDiscount:total:_ <- replicateM 4 $ plainText "0.00 XXX"
   products <- newList selAttr 2
   -- setup the focus group
   fg <- newFocusGroup
-  mapM_ (addToFocusGroup fg) [client, date, due, from, to]
+  addToFocusGroup fg clientList
+  mapM_ (addToFocusGroup fg) [date, due, from, to]
   _ <- addToFocusGroup fg products
   mapM_ (addToFocusGroup fg) [discount, vat]
   -- build the widget
-  widget <- (((plainText "Client:" <++> boxFixed 5 1 client) >>= withPadding (padBottom 1)) <-->
+  widget <- (((plainText "Client:" <++> vFixed 1 clientList) >>= withPadding (padBottom 1)) <-->
             ((plainText "Date:" <++> boxFixed 11 1 date <++>
               plainText " Due:" <++> boxFixed 11 1 due) >>= withPadding (padBottom 1)) <-->
             plainText "Period" <-->
@@ -135,7 +137,7 @@ mkInvoiceUI = do
         ((hFill ' ' 1 <++> plainText "Total: " <++> boxFixed 10 1 total)
          >>= withPadding (padTop 1))) >>= withPadding (padLeft 2) >>= withPadding (padRight 2)
   -- return the invoiceUI
-  return $ InvoiceUI client date due from to products vat discount cashback subtotal totalVAT totalDiscount total widget fg
+  return $ InvoiceUI clientList date due from to products vat discount cashback subtotal totalVAT totalDiscount total widget fg
 
 mkProductItem products product changeCB = do
   ref <- newIORef product
@@ -200,7 +202,7 @@ mkProductItem products product changeCB = do
 
   return (ref, widget)
 
-mkInvoiceController prods@(p0:_) = do
+mkInvoiceController prods@(p0:_) clients = do
   -- create the backing ref
   -- XXX: I hate this.  Having to instantiate an "empty" Invoice is kinda stupid.
   let mkNewInvoiceRef :: IO (IORef Invoice)
@@ -209,6 +211,13 @@ mkInvoiceController prods@(p0:_) = do
                    
   -- crete the UI
   invoiceUI <- mkInvoiceUI
+
+  forM_ clients $ \c@Client{Models.Client.name=n} ->
+    plainText (T.pack n) >>= addToList (clientList invoiceUI) c
+
+  (clientList invoiceUI) `onSelectionChange` \e -> case e of
+    SelectionOn _ c _ -> modifyIORef' ref $ \x -> x{Models.Invoice.client = c }
+    SelectionOff -> return ()
 
   -- helper
   let pct = (/100) . toDecimal 0
@@ -290,14 +299,15 @@ mkInvoiceController prods@(p0:_) = do
   let bind' inv = do
         writeIORef ref inv
         -- XXX update the UI with the new ref.
-        return ()
+        return ()  
+  
   return $ InvoiceController ref invoiceUI bind' (readIORef ref)
 
 -- Test
 main = do
   let products = [Product (-1) "Product A" 75.00 1 "EUR"
                  ,Product (-1) "Product B" 35.00 2 "EUR"]
-  invoiceC <- mkInvoiceController products
+  invoiceC <- mkInvoiceController products []
   let invoiceUI = ui invoiceC
       
   -- add the containing widget
