@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module UI where
 
-import Graphics.Vty hiding (Button)
+import Graphics.Vty hiding (Button,(<|>))
 import Graphics.Vty.Widgets.All
 import Database.SQLite.Simple (Connection)
 import qualified Data.Text as T
@@ -12,6 +12,7 @@ import Models.Invoice
 import Views.AddClient
 import Views.AddProduct
 import Views.Invoice (mkInvoiceController, UI(..), Controller(..))
+import Control.Applicative ((<|>),(<$>),(<*>),liftA2)
 
 companyName = "HInvoice"
 version = "v0.1"
@@ -145,6 +146,30 @@ showInvoiceAddUI app completion = do
         onCancel _ = const completion
 -}
 --------------------------------------------------------------------------------
+-- invoice validation
+validatePeriod :: Invoice -> Maybe T.Text
+validatePeriod (Invoice { period = p }) =
+  case p of
+    (Period Nothing _) -> Just "From Date must be set!"
+    (Period _ Nothing) -> Just "To Date must be set!"
+    _ -> Nothing
+validateDate :: Invoice -> Maybe T.Text
+validateDate (Invoice { Models.Invoice.date = d }) =
+  case d of
+    Nothing -> Just "A Date must be set!"
+    _ -> Nothing
+validateDue :: Invoice -> Maybe T.Text
+validateDue (Invoice { Models.Invoice.due = d }) =
+  case d of
+    Nothing -> Just "A Due Date must be set!"
+    _ -> Nothing
+validateItems :: Invoice -> Maybe T.Text
+validateItems (Invoice { items = i }) =
+  if length i == 0
+  then Just "An Invoice should have at least one position"
+  else Nothing
+  
+--------------------------------------------------------------------------------
 mainUI conn = do
 
   app <- mkAppUI conn
@@ -152,21 +177,33 @@ mainUI conn = do
   (clui, clfg) <- clientListUI app
   (pdui, pdfg) <- productListUI app
   (inui, infg) <- invoiceListUI app
-  invoiceC <- mkInvoiceController =<< (allProducts $ getConn app)
+  invoiceC <- do
+    products <- (allProducts $ getConn app)
+    clients  <- (allClients $ getConn app)
+    mkInvoiceController products clients
 
   let invoiceUI = ui invoiceC
       
   -- add the containing widget
-  (dlg, dfg) <- newDialog (widget invoiceUI) "New Invoice"
+  -- first let's add a plaintext widget, so that we can show issues if they arise on pressing "ok"
+  errorLabel <- plainText ""
+  -- inject the error label below the invoiceUI widget but above the OK/Cancel buttons.
+  dialogBody <- (return $ widget invoiceUI) <--> (return errorLabel)
+  (dlg, dfg) <- newDialog dialogBody "New Invoice"
   mfg <- mergeFocusGroups (fg invoiceUI) dfg
 
-  switchToClientList <- addToCollection (getUIs app) clui clfg
+  switchToClientList  <- addToCollection (getUIs app) clui clfg
   switchToProductList <- addToCollection (getUIs app) pdui pdfg
   switchToInvoiceList <- addToCollection (getUIs app) inui infg
   switchToNewInvoice  <- addToCollection (getUIs app) (dialogWidget dlg) mfg
 
 
-  dlg `onDialogAccept` \_ -> switchToInvoiceList
+  dlg `onDialogAccept` \_ -> do
+    -- check the invoice
+    inv <- vreturn invoiceC
+    case validatePeriod inv <|> validateDate inv <|> validateDue inv <|> validateItems inv of
+      Just t -> setText errorLabel t
+      Nothing -> switchToInvoiceList
   dlg `onDialogCancel` \_ -> switchToInvoiceList
 
 --  (caui, cafg) <- clientAddUI (const $ switchToClientList) (const $ switchToClientList)
