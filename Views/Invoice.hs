@@ -3,7 +3,7 @@ module Views.Invoice where
 import Graphics.Vty hiding (Button)
 import Graphics.Vty.Widgets.All
 import Models.Product (Product(..))
-import Models.Invoice (mkInvoice, ProductItem(..), productItemTotal, Period(..), Invoice(..))
+import Models.Invoice (mkNewInvoice, ProductItem(..), productItemTotal, Period(..), Invoice(..))
 import Models.Client (Client(..))
 import Control.Monad (liftM, forM_, replicateM)
 import Control.Applicative ((<$>),(<*>))
@@ -206,7 +206,7 @@ mkInvoiceController prods@(p0:_) clients = do
   -- create the backing ref
   -- XXX: I hate this.  Having to instantiate an "empty" Invoice is kinda stupid.
   let mkNewInvoiceRef :: IO (IORef Invoice)
-      mkNewInvoiceRef = newIORef (Invoice (-1) (-1) EmptyClient (Period Nothing Nothing) Nothing Nothing [] 0.19 0.0 0.0)
+      mkNewInvoiceRef = newIORef $ mkNewInvoice
   ref <- mkNewInvoiceRef
                    
   -- crete the UI
