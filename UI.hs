@@ -195,16 +195,23 @@ mainUI conn = do
   switchToClientList  <- addToCollection (getUIs app) clui clfg
   switchToProductList <- addToCollection (getUIs app) pdui pdfg
   switchToInvoiceList <- addToCollection (getUIs app) inui infg
-  switchToNewInvoice  <- addToCollection (getUIs app) (dialogWidget dlg) mfg
+  switchToInvoiceView  <- addToCollection (getUIs app) (dialogWidget dlg) mfg
 
 
+  let switchToInvoice inv = vbind invoiceC inv >> switchToInvoiceView
+      switchToNewInvoice = switchToInvoice mkNewInvoice
+      clearErrorAndSwitchToInvoiceList = setText errorLabel "" >> switchToInvoiceList
+
+  
   dlg `onDialogAccept` \_ -> do
     -- check the invoice
     inv <- vreturn invoiceC
     case validatePeriod inv <|> validateDate inv <|> validateDue inv <|> validateItems inv of
       Just t -> setText errorLabel t
-      Nothing -> switchToInvoiceList
-  dlg `onDialogCancel` \_ -> switchToInvoiceList
+      Nothing -> do
+        insertInvoice (getConn app) inv
+        clearErrorAndSwitchToInvoiceList
+  dlg `onDialogCancel` \_ -> clearErrorAndSwitchToInvoiceList
 
 --  (caui, cafg) <- clientAddUI (const $ switchToClientList) (const $ switchToClientList)
 --  switchToClientAdd  <- addToCollection c caui cafg
