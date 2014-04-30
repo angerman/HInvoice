@@ -202,6 +202,8 @@ mainUI conn = do
       switchToNewInvoice = switchToInvoice mkNewInvoice
       clearErrorAndSwitchToInvoiceList = setText errorLabel "" >> switchToInvoiceList
 
+
+  (getInvList (getInvoices app)) `onItemActivated` \(ActivateItemEvent _ inv _) -> switchToInvoice inv
   
   dlg `onDialogAccept` \_ -> do
     -- check the invoice
