@@ -301,7 +301,25 @@ mkInvoiceController prods@(p0:_) clients = do
   -- setup the bindings
   let bind' inv = do
         writeIORef ref inv
-        -- XXX update the UI with the new ref.
+        -- set client
+        case (client inv) of
+          EmptyClient -> (clientList invoiceUI) `setSelected` 0
+          c -> do
+            pos <- fromMaybe 0 <$> (indexOf (clientList invoiceUI) c)
+            (clientList invoiceUI) `setSelected` pos
+        -- set Date, Due
+        setEditText (Views.Invoice.date invoiceUI) $ fromMaybe "" $ T.pack . show <$> Models.Invoice.date inv
+        setEditText (Views.Invoice.due  invoiceUI) $ fromMaybe "" $ T.pack . show <$> Models.Invoice.due  inv
+        -- set Period
+        let (Period f t) = (Models.Invoice.period inv)
+        setEditText (Views.Invoice.from invoiceUI) $ fromMaybe "" $ T.pack . show <$> f
+        setEditText (Views.Invoice.to   invoiceUI) $ fromMaybe "" $ T.pack . show <$> t
+        forM_ (Models.Invoice.items inv) $ \item -> mkProductItem prods item updateAll >>= uncurry (addToList (products invoiceUI))
+--        setText (msgW invoiceUI) $ T.pack . show $ length (Models.Invoice.items inv)
+        setEditText (Views.Invoice.vat      invoiceUI) $ T.pack . show $ 100 * Models.Invoice.vat      inv
+        setEditText (Views.Invoice.discount invoiceUI) $ T.pack . show $ 100 * Models.Invoice.discount inv
+        -- focus!
+        focus (clientList invoiceUI)
         return ()  
   
   return $ InvoiceController ref invoiceUI bind' (readIORef ref)
