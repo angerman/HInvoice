@@ -74,6 +74,7 @@ data UI a = InvoiceUI { clientList :: Widget (List Client FormattedText)
                       , totalDiscount :: Widget FormattedText
                       , total    :: Widget FormattedText
                       , widget   :: Widget a
+                      , msgW     :: Widget FormattedText
                       , fg       :: Widget FocusGroup}
           | Empty
 
@@ -92,6 +93,7 @@ mkInvoiceUI = do
   clientList <- newList selAttr 1
   -- create the plain text widgets (Labels)
   subtotal:totalVAT:totalDiscount:total:_ <- replicateM 4 $ plainText "0.00 XXX"
+  msgW <- plainText ""
   products <- newList selAttr 2
   -- setup the focus group
   fg <- newFocusGroup
@@ -134,10 +136,11 @@ mkInvoiceUI = do
         --  (plainText "%") <++>
         --  (boxFixed 7 1 totalCashback'))
         -- <-->
-        ((hFill ' ' 1 <++> plainText "Total: " <++> boxFixed 10 1 total)
+        (((hFill ' ' 1 <++> plainText "Total: " <++> boxFixed 10 1 total)
+         <--> (return msgW))
          >>= withPadding (padTop 1))) >>= withPadding (padLeft 2) >>= withPadding (padRight 2)
   -- return the invoiceUI
-  return $ InvoiceUI clientList date due from to products vat discount cashback subtotal totalVAT totalDiscount total widget fg
+  return $ InvoiceUI clientList date due from to products vat discount cashback subtotal totalVAT totalDiscount total widget msgW fg
 
 mkProductItem products product changeCB = do
   ref <- newIORef product
