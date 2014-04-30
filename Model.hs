@@ -14,6 +14,6 @@ import Database.SQLite.Simple.Internal (Field(..))
 takeInt :: (Num a, Typeable a) => Field -> Ok a
 takeInt (Field (SQLInteger i) _) = Ok . fromIntegral $ i
 takeInt f                        = returnError ConversionFailed f "need an int"
-instance FromField Word8 where
-  fromField = takeInt
+--instance FromField Word8 where
+--  fromField = takeInt
 
