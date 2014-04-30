@@ -11,7 +11,7 @@ data Address  = Address  { street :: String
                          , city :: String
                          , state :: Maybe String
                          , country :: String }
-              deriving (Show)
+              deriving (Show, Eq)
                         
 data Client = Client { clientPK :: Int
                      , clientID :: Int
@@ -19,7 +19,7 @@ data Client = Client { clientPK :: Int
                      , address :: Address
                      , vatNo :: Maybe String }
             | EmptyClient
-              deriving (Show)
+              deriving (Show, Eq)
                        
 instance FromRow Client where
   fromRow = Client <$> field <*> field <*> field <*> (Address <$> field <*> field <*> field <*> field <*> field) <*> field
