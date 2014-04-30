@@ -32,6 +32,8 @@ data Invoice = Invoice { invoicePK :: Int
                        , cashback :: Decimal }
                deriving (Show)
 
+mkNewInvoice = Invoice (-1) (-1) EmptyClient (Period Nothing Nothing) Nothing Nothing [] 0.19 0.0 0.0
+
 name inv = (show . date $ inv) ++ " " ++ (Models.Client.name . client $ inv) -- (total)
 
 instance FromRow Invoice where
