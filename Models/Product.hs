@@ -13,7 +13,7 @@ data Product = Product { productPK :: Int
                        , price :: Decimal
                        , base :: Int
                        , currency :: String }
-               deriving (Show)
+               deriving (Show, Eq)
 
 instance FromRow Product where
   fromRow = Product <$> field <*> field <*> (Decimal <$> field <*> field) <*> field <*> field
@@ -32,3 +32,4 @@ updateProduct conn prod = do
   where (Product pk n (Decimal pdp p) b c) = prod
 
 allProducts conn = query_ conn "select * from products" :: IO [Product]
+
