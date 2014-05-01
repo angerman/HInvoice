@@ -149,7 +149,7 @@ mkProductItem products product changeCB = do
   productW <- newList selAttr 1
   forM_ products $ \p@Product{Models.Product.name=n} ->
     plainText (T.pack n) >>= addToList productW p
-    
+
   totalW <- plainText ""
   commentW <- editWidget
 
@@ -199,6 +199,10 @@ mkProductItem products product changeCB = do
   -- set initial values
   readIORef ref >>= \x -> setEditText qtyW (T.pack . show . qty $ x)
   readIORef ref >>= \x -> setEditText commentW (T.pack . comment $ x)
+  readIORef ref >>= \x -> do
+    let prod = Models.Invoice.product x in do
+      pos <- productW `indexOf` prod
+      productW `setSelected` (fromMaybe 0 pos)
 
   widget <- (boxFixed 5 1 qtyW <++> vFixed 1 productW <++> hFill ' ' 1 <++> return totalW)
             <--> return commentW
@@ -314,6 +318,7 @@ mkInvoiceController prods@(p0:_) clients = do
         let (Period f t) = (Models.Invoice.period inv)
         setEditText (Views.Invoice.from invoiceUI) $ fromMaybe "" $ T.pack . show <$> f
         setEditText (Views.Invoice.to   invoiceUI) $ fromMaybe "" $ T.pack . show <$> t
+        clearList (products invoiceUI)
         forM_ (Models.Invoice.items inv) $ \item -> mkProductItem prods item updateAll >>= uncurry (addToList (products invoiceUI))
 --        setText (msgW invoiceUI) $ T.pack . show $ length (Models.Invoice.items inv)
         setEditText (Views.Invoice.vat      invoiceUI) $ T.pack . show $ 100 * Models.Invoice.vat      inv
