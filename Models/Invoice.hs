@@ -2,7 +2,7 @@
 module Models.Invoice where
 
 import Control.Applicative
-import Database.SQLite.Simple (execute, query_, lastInsertRowId)
+import Database.SQLite.Simple (Only(..), execute, query, query_, lastInsertRowId)
 import Database.SQLite.Simple.FromRow
 import Database.SQLite.Simple.ToRow
 import Database.SQLite.Simple.ToField (toField)
@@ -19,6 +19,11 @@ data ProductItem = ProductItem { qty :: Int
                  deriving (Show)
 
 productItemTotal pi@(ProductItem q p _) = (fromIntegral q) * (price p)
+
+instance FromRow ProductItem where
+  fromRow = ProductItem <$> field <*> fromRow <*> field -- Product supports fromRow!
+
+-- no ToRow support for now. This is implicitly handled in @insertInvoice@.
 
 data Invoice = Invoice { invoicePK :: Int
                        , invoiceID :: Int
@@ -64,4 +69,16 @@ insertInvoice conn inv = do
   mapM_ (\(ProductItem q p _) -> execute conn "insert into invoices_products (invoice, product, quantity) values (?,?,?)" (id, productPK p, q)) (items inv)
   return inv{ invoicePK = fromIntegral id }
 
-allInvoices conn = query_ conn "SELECT i.pk, i.id, c.*, i.`from`, i.`to`, i.date, i.due, i.vatDecimalPlaces, i.vat, i.discountDecimalPlaces, i.discount, i.cashbackDecimalPlaces, i.cashback FROM invoices AS i join clients AS c ON (i.client=c.pk)" :: IO [Invoice]
+allInvoices conn = do
+  invoices <- query_ conn "SELECT i.pk, i.id, c.*, i.`from`, i.`to`, i.date, i.due, i.vatDecimalPlaces, i.vat, i.discountDecimalPlaces, i.discount, i.cashbackDecimalPlaces, i.cashback FROM invoices AS i join clients AS c ON (i.client=c.pk)" :: IO [Invoice]
+  -- I would have prefered to see this *in* the fromRow logic, such that fromRow would pull the required items from the database.
+  -- Another solution to explore would be to test if we can lazy load the data? Provide the items piece with a funtion returning a list,
+  -- but prepopulated with the connection and the invoice itself, thus being able to pull the data on demand. Would probably require items
+  -- to be of type IO [ProductItems] (?).
+  --
+  -- Anyway, now we need to populate every invoice with it's product items.
+  mapM addItemsToInvoice invoices
+  where
+    addItemsToInvoice inv = do
+      productItems <- query conn "SELECT ip.quantity, p.*, IFNULL(ip.comment,'') FROM invoices_products AS ip JOIN products p ON (ip.product=p.pk) WHERE ip.invoice=?" (Only (invoicePK inv)) :: IO [ProductItem]
+      return $ inv { items = productItems }
