@@ -211,7 +211,7 @@ mainUI conn = do
     case validatePeriod inv <|> validateDate inv <|> validateDue inv <|> validateItems inv of
       Just t -> setText errorLabel t
       Nothing -> do
-        insertInvoice (getConn app) inv
+        updateOrInsertInvoice (getConn app) inv
         clearErrorAndSwitchToInvoiceList
   dlg `onDialogCancel` \_ -> clearErrorAndSwitchToInvoiceList
 
