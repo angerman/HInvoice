@@ -201,7 +201,7 @@ mkProductItem products product changeCB = do
   readIORef ref >>= \x -> setEditText commentW (T.pack . comment $ x)
   readIORef ref >>= \x -> do
     let prod = Models.Invoice.product x in do
-      pos <- productW `indexOf` prod
+      pos <- head' <$> productW `getListIndicesOf` prod
       productW `setSelected` (fromMaybe 0 pos)
 
   widget <- (boxFixed 5 1 qtyW <++> vFixed 1 productW <++> hFill ' ' 1 <++> return totalW)
@@ -309,7 +309,7 @@ mkInvoiceController prods@(p0:_) clients = do
         case (client inv) of
           EmptyClient -> (clientList invoiceUI) `setSelected` 0
           c -> do
-            pos <- fromMaybe 0 <$> (indexOf (clientList invoiceUI) c)
+            pos <- fromMaybe 0 <$> (getFirstListIndexOf (clientList invoiceUI) c)
             (clientList invoiceUI) `setSelected` pos
         -- set Date, Due
         setEditText (Views.Invoice.date invoiceUI) $ fromMaybe "" $ T.pack . show <$> Models.Invoice.date inv
