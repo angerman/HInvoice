@@ -2,7 +2,7 @@
 module Models.Invoice where
 
 import Control.Applicative
-import Database.SQLite.Simple (Only(..), execute, query, query_, lastInsertRowId)
+import Database.SQLite.Simple (Only(..), execute, query, query_, lastInsertRowId, (:.)(..))
 import Database.SQLite.Simple.FromRow
 import Database.SQLite.Simple.ToRow
 import Database.SQLite.Simple.ToField (toField)
@@ -25,7 +25,7 @@ instance FromRow ProductItem where
 
 -- no ToRow support for now. This is implicitly handled in @insertInvoice@.
 
-data Invoice = Invoice { invoicePK :: Int
+data Invoice = Invoice { invoicePK :: Maybe Int
                        , invoiceID :: Int
                        , client :: Client -- (to one)
                        , period :: Period
@@ -37,7 +37,7 @@ data Invoice = Invoice { invoicePK :: Int
                        , cashback :: Decimal }
                deriving (Show)
 
-mkNewInvoice = Invoice (-1) (-1) EmptyClient (Period Nothing Nothing) Nothing Nothing [] 0.19 0.0 0.0
+mkNewInvoice = Invoice Nothing (-1) EmptyClient (Period Nothing Nothing) Nothing Nothing [] 0.19 0.0 0.0
 
 name inv = (show . date $ inv) ++ " " ++ (Models.Client.name . client $ inv) -- (total)
 
@@ -66,8 +66,15 @@ mkInvoice' a b c d e f g h i = mkInvoice a b c d e f [] g h i
 insertInvoice conn inv = do
   execute conn "insert into invoices (id,client,`from`,`to`,`date`,`due`,vatDecimalPlaces,vat,discountDecimalPlaces,discount,cashbackDecimalPlaces,cashback) values (?,?,?,?,?,?,?,?,?,?,?,?)" inv
   id <- lastInsertRowId conn
-  mapM_ (\(ProductItem q p _) -> execute conn "insert into invoices_products (invoice, product, quantity) values (?,?,?)" (id, productPK p, q)) (items inv)
-  return inv{ invoicePK = fromIntegral id }
+  mapM_ (\(ProductItem q p c) -> execute conn "insert into invoices_products (invoice, product, quantity, comment) values (?,?,?,?)" (id, productPK p, q, c)) (items inv)
+  return inv{ invoicePK = Just $ fromIntegral id }
+
+updateOrInsertInvoice conn inv@(Invoice { invoicePK = Nothing }) = insertInvoice conn inv
+updateOrInsertInvoice conn inv@(Invoice { invoicePK = Just pk }) = do
+  execute conn "update invoices set id=?, client=?, `from`=?, `to`=?, `date`=?, `due`=?, vatDecimalPlaces=?, vat=?, discountDecimalPlaces=?, discount=?, cashbackDecimalPlaces=?, cashback=? where pk=?" (inv :. (Only pk))
+  execute conn "delete from invoices_products where invoice=?" (Only pk)
+  mapM_ (\(ProductItem q p c) -> execute conn "insert into invoices_products (invoice, product, quantity, comment) values (?,?,?,?)" (pk, productPK p, q, c)) (items inv)
+  return inv
 
 allInvoices conn = do
   invoices <- query_ conn "SELECT i.pk, i.id, c.*, i.`from`, i.`to`, i.date, i.due, i.vatDecimalPlaces, i.vat, i.discountDecimalPlaces, i.discount, i.cashbackDecimalPlaces, i.cashback FROM invoices AS i join clients AS c ON (i.client=c.pk)" :: IO [Invoice]
