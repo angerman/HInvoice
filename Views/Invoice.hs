@@ -189,7 +189,10 @@ mkProductItem products product changeCB = do
     -- call the callback
     changeCB
   
-  commentW `onChange` \t -> modifyIORef' ref $ \x -> x{ comment = T.unpack t }
+  commentW `onChange` \t -> do
+    modifyIORef' ref $ \x -> x{ comment = T.unpack t }
+    -- call the callback
+    changeCB
 
   -- list events
   productW `onSelectionChange` \(SelectionOn _ p _) -> do
